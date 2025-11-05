@@ -168,7 +168,7 @@ function EnhancedContactForm() {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -203,22 +203,37 @@ function EnhancedContactForm() {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
+    setSubmitStatus('idle');
     
     try {
-      // Simulate API call - replace with your actual form submission
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Here you would typically send the data to your backend
-      console.log('Form submitted:', formData);
-      
-      setIsSubmitted(true);
-      setFormData({ name: '', email: '', subject: '', message: '' });
-      
-      // Reset success message after 5 seconds
-      setTimeout(() => setIsSubmitted(false), 5000);
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: '', // Add phone field if needed
+          service: formData.subject, // Using subject as service
+          budget: 'Not specified', // Add budget field if needed
+          message: formData.message,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setSubmitStatus('success');
+        setFormData({ name: '', email: '', subject: '', message: '' });
+      } else {
+        setSubmitStatus('error');
+        setErrors({ submit: result.error || 'Failed to send message. Please try again.' });
+      }
     } catch (error) {
       console.error('Form submission error:', error);
-      setErrors({ submit: 'Failed to send message. Please try again.' });
+      setSubmitStatus('error');
+      setErrors({ submit: 'Network error. Please check your connection and try again.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -240,7 +255,7 @@ function EnhancedContactForm() {
     }
   };
 
-  if (isSubmitted) {
+  if (submitStatus === 'success') {
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
@@ -252,9 +267,12 @@ function EnhancedContactForm() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
           </svg>
         </div>
-        <h3 className="text-2xl font-bold text-green-900 mb-2">Message Sent!</h3>
-        <p className="text-green-700">
-          Thank you for your message. We'll get back to you within 24 hours.
+        <h3 className="text-2xl font-bold text-green-900 mb-2">Message Sent Successfully!</h3>
+        <p className="text-green-700 mb-4">
+          Thank you for your message! We've received your inquiry and will contact you within 24 hours.
+        </p>
+        <p className="text-green-600 text-sm">
+          Check your email for a confirmation message from us.
         </p>
       </motion.div>
     );
@@ -333,10 +351,14 @@ function EnhancedContactForm() {
         {errors.message && <p className="mt-1 text-sm text-red-600">{errors.message}</p>}
       </div>
       
-      {errors.submit && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-700 text-sm">{errors.submit}</p>
-        </div>
+      {submitStatus === 'error' && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-50 border border-red-200 rounded-lg p-4"
+        >
+          <p className="text-red-700 text-sm">{errors.submit || 'Failed to send message. Please try again.'}</p>
+        </motion.div>
       )}
       
       <motion.button
@@ -349,7 +371,7 @@ function EnhancedContactForm() {
         {isSubmitting ? (
           <>
             <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Sending...</span>
+            <span>Sending Message...</span>
           </>
         ) : (
           <>
