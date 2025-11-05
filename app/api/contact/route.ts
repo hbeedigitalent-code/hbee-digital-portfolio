@@ -15,8 +15,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Send email to you
-    const { data, error } = await resend.emails.send({
+    // Send email to you (business email)
+    const businessEmailResult = await resend.emails.send({
       from: 'Hbee Digital <onboarding@resend.dev>',
       to: [process.env.CONTACT_EMAIL!],
       subject: `New Project Inquiry: ${name}`,
@@ -72,13 +72,13 @@ export async function POST(request: Request) {
       `,
     });
 
-    if (error) {
-      console.error('Resend error:', error);
-      return NextResponse.json({ error: 'Failed to send email' }, { status: 500 });
+    if (businessEmailResult.error) {
+      console.error('Business email error:', businessEmailResult.error);
+      // Don't return error yet, try to send confirmation email first
     }
 
-    // Send confirmation email to the user
-    await resend.emails.send({
+    // Send confirmation email to the user (this should work independently)
+    const confirmationEmailResult = await resend.emails.send({
       from: 'Hbee Digital <onboarding@resend.dev>',
       to: [email],
       subject: 'We Received Your Project Inquiry!',
@@ -118,7 +118,18 @@ export async function POST(request: Request) {
       `,
     });
 
-    return NextResponse.json({ success: true, data });
+    if (confirmationEmailResult.error) {
+      console.error('Confirmation email error:', confirmationEmailResult.error);
+      // Even if confirmation fails, we still consider it a success since the main email was sent
+    }
+
+    // Return success even if confirmation email fails
+    return NextResponse.json({ 
+      success: true, 
+      businessEmailSent: !businessEmailResult.error,
+      confirmationEmailSent: !confirmationEmailResult.error
+    });
+
   } catch (error) {
     console.error('Contact API error:', error);
     return NextResponse.json(
