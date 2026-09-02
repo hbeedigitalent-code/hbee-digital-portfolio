@@ -63,14 +63,14 @@ export const metadata: Metadata = {
     title: siteTitle,
     description: siteDescription,
     siteName,
-    images: [{ url: `${siteUrl}/og-image.jpg`, width: 1200, height: 630, alt: 'Hbee Digitals — Digital Growth Studio' }],
+    images: [{ url: `${siteUrl}/svgs/og-image.jpg`, width: 1200, height: 630, alt: 'Hbee Digitals — Digital Growth Studio' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: siteTitle,
     description: siteDescription,
     creator: '@hbeedigitals',
-    images: [`${siteUrl}/twitter-image.jpg`],
+    images: [`${siteUrl}/svgs/twitter-image.jpg`],
   },
   robots: {
     index: true,
@@ -99,35 +99,32 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable}`} suppressHydrationWarning>
       <head>
-        {/* Preconnect to critical origins */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        
-        {/* DNS Prefetch for external resources */}
-        <link rel="dns-prefetch" href="https://your-supabase-url.supabase.co" />
-        
-        {/* Preload critical assets */}
-        <link rel="preload" as="style" href="/critical.css" />
-        <link rel="preload" as="font" href="/fonts/Inter-var.woff2" type="font/woff2" crossOrigin="anonymous" />
-        
-        {/* Critical CSS inlined */}
+        {/*
+          Set the theme before first paint. A saved choice wins; otherwise the
+          site defaults to dark. Kept in sync with src/context/ThemeContext.tsx.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark')t='dark';var e=document.documentElement;e.classList.toggle('dark',t==='dark');e.setAttribute('data-theme',t);}catch(_){document.documentElement.classList.add('dark');document.documentElement.setAttribute('data-theme','dark');}})();`,
+          }}
+        />
+
+        {/*
+          Critical above-the-fold CSS. Fonts are loaded once via next/font
+          (no <link>/@import font loading). The button system lives in
+          globals.css — no .btn-* rules here to avoid competing definitions.
+        */}
         <style dangerouslySetInnerHTML={{
           __html: `
-            /* Critical CSS - Above the fold styles */
             *{margin:0;padding:0;box-sizing:border-box}
             nav{position:fixed;top:0;left:0;right:0;z-index:50;background:var(--bg-page);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
-            .hero-section{min-height:100vh;background:linear-gradient(135deg,#0A1D37 0%,#0F3460 30%,#1B4F8A 60%,#39D97A 100%);padding-top:80px}
-            .hero-title{font-size:clamp(2.5rem,5vw,4rem);font-weight:900;line-height:1.1;color:#fff}
-            .btn-primary{display:inline-flex;align-items:center;gap:8px;border-radius:9999px;background:linear-gradient(135deg,#FF6B35 0%,#39D97A 100%);padding:12px 28px;font-weight:900;color:#fff;transition:transform .2s}
-            .btn-primary:hover{transform:scale(1.02)}
-            .hero-image{aspect-ratio:1/1;width:100%;max-width:480px;object-fit:cover;border-radius:16px}
             .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}
           `
         }} />
       </head>
       <body
         className="antialiased"
-        style={{ fontFamily: "var(--font-inter), 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}
+        style={{ fontFamily: "var(--font-sans)" }}
         suppressHydrationWarning
       >
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[9999] focus:rounded-md focus:bg-white focus:px-4 focus:py-2 focus:text-gray-900 focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]">

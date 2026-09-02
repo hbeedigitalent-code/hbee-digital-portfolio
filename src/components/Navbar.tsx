@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion'
@@ -218,9 +218,44 @@ export default function Navbar() {
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const chatDropdownRef = useRef<HTMLDivElement>(null)
 
+  // Per-group horizontal offset + width for the desktop submenu so it always
+  // stays inside the viewport (Portfolio / Company / Resources sit near the
+  // right edge). Computed from the trigger's live position, not a fixed offset.
+  const submenuTriggerRefs = useRef<Record<string, HTMLLIElement | null>>({})
+  const [submenuBoxes, setSubmenuBoxes] = useState<Record<string, { left: number; width: number }>>({})
+
+  const positionSubmenu = useCallback((label: string) => {
+    const el = submenuTriggerRefs.current[label]
+    if (!el || typeof window === 'undefined') return
+
+    const rect = el.getBoundingClientRect()
+    const viewportWidth = document.documentElement.clientWidth
+    const EDGE_MARGIN = 16 // min gap kept from either viewport edge
+    const MAX_WIDTH = 880
+
+    const width = Math.min(MAX_WIDTH, viewportWidth - EDGE_MARGIN * 2)
+    const triggerCenter = rect.left + rect.width / 2
+    const idealLeft = triggerCenter - width / 2
+    const clampedLeft = Math.max(
+      EDGE_MARGIN,
+      Math.min(idealLeft, viewportWidth - EDGE_MARGIN - width),
+    )
+
+    // `left` is relative to the trigger <li> (the positioned offset parent).
+    setSubmenuBoxes((prev) => ({ ...prev, [label]: { left: clampedLeft - rect.left, width } }))
+  }, [])
+
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Re-clamp the open submenu when the window resizes.
+  useEffect(() => {
+    if (!openDropdown) return
+    const onResize = () => positionSubmenu(openDropdown)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [openDropdown, positionSubmenu])
 
   const desktopMenu = useMemo(() => {
     const coreLabels = ['Services', 'Portfolio', 'Company', 'Resources', 'Contact']
@@ -242,6 +277,7 @@ export default function Navbar() {
 
   const handleMouseEnter = (label: string) => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    positionSubmenu(label)
     setOpenDropdown(label)
   }
 
@@ -432,6 +468,9 @@ export default function Navbar() {
                 return (
                   <li
                     key={`${link.label}-${link.href}`}
+                    ref={(el) => {
+                      submenuTriggerRefs.current[link.label] = el
+                    }}
                     className="relative"
                     onMouseEnter={() => hasChildren && handleMouseEnter(link.label)}
                     onMouseLeave={handleMouseLeave}
@@ -466,10 +505,15 @@ export default function Navbar() {
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={reducedMotion ? undefined : { opacity: 0, y: 8, scale: 0.98 }}
                           transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                          // Centered submenu - equal space on both sides
-                          className="absolute left-1/2 top-[calc(100%+14px)] z-50 -translate-x-1/2"
+                          // Viewport-clamped submenu — horizontal offset is measured
+                          // from the trigger so it never overflows the right edge.
+                          className="absolute top-[calc(100%+14px)] z-50"
+                          style={{
+                            left: submenuBoxes[link.label]?.left ?? 0,
+                            width: submenuBoxes[link.label]?.width ?? 880,
+                          }}
                         >
-                          <div className="w-[880px] max-w-[90vw] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-xl)]">
+                          <div className="w-full max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-xl)]">
                             <div className="grid grid-cols-2 gap-5">
                               {link.children?.map((child) => (
                                 <Link

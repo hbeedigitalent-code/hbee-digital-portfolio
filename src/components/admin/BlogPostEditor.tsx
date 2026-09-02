@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { SITE_URL } from '@/lib/blog-utils'
 
 type InitialPost = {
   id?: string
@@ -23,10 +24,13 @@ type InitialPost = {
   focus_keyword?: string
   og_title?: string
   og_description?: string
+  og_image?: string
+  canonical_url?: string
+  read_time?: string
+  cta_text?: string
+  cta_link?: string
   published_at?: string | null
 }
-
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.hbeedigitals.com'
 
 function slugify(value: string) {
   return value
@@ -40,7 +44,7 @@ function slugify(value: string) {
 function toAbsoluteUrl(url: string) {
   if (!url) return ''
   if (url.startsWith('http://') || url.startsWith('https://')) return url
-  if (url.startsWith('/')) return `${siteUrl}${url}`
+  if (url.startsWith('/')) return `${SITE_URL}${url}`
   return url
 }
 
@@ -81,10 +85,17 @@ export default function BlogPostEditor({
   const [focusKeyword, setFocusKeyword] = useState(initialPost?.focus_keyword || '')
   const [ogTitle, setOgTitle] = useState(initialPost?.og_title || '')
   const [ogDescription, setOgDescription] = useState(initialPost?.og_description || '')
+  const [ogImage, setOgImage] = useState(initialPost?.og_image || '')
+  const [canonicalUrl, setCanonicalUrl] = useState(initialPost?.canonical_url || '')
+
+  const [readTimeInput, setReadTimeInput] = useState(initialPost?.read_time || '')
+  const [ctaText, setCtaText] = useState(initialPost?.cta_text || '')
+  const [ctaLink, setCtaLink] = useState(initialPost?.cta_link || '')
 
   const finalSlug = useMemo(() => slug || slugify(title), [slug, title])
   const finalFeaturedImage = useMemo(() => toAbsoluteUrl(featuredImage), [featuredImage])
   const readTime = useMemo(() => estimateReadTime(content), [content])
+  const finalReadTime = readTimeInput.trim() || readTime
 
   function insertSnippet(snippet: string) {
     setContent((prev) => `${prev}\n\n${snippet}`)
@@ -147,7 +158,9 @@ export default function BlogPostEditor({
       post_type: 'blog',
       is_featured: isFeatured,
       featured_badge: featuredBadge,
-      read_time: readTime,
+      read_time: finalReadTime,
+      cta_text: ctaText.trim() || null,
+      cta_link: ctaLink.trim() || null,
       published_at:
         status === 'published'
           ? initialPost?.published_at || new Date().toISOString()
@@ -159,8 +172,8 @@ export default function BlogPostEditor({
 
       og_title: ogTitle || seoTitle || title,
       og_description: ogDescription || seoDescription || excerpt.slice(0, 200),
-      og_image: finalFeaturedImage || null,
-      canonical_url: `${siteUrl}/blog/${finalSlug}`,
+      og_image: ogImage.trim() || finalFeaturedImage || null,
+      canonical_url: canonicalUrl.trim() || `${SITE_URL}/blog/${finalSlug}`,
       updated_at: new Date().toISOString(),
     }
 
@@ -199,7 +212,7 @@ export default function BlogPostEditor({
                 <ToolButton onClick={() => insertSnippet('<p>Write your paragraph here.</p>')}>Paragraph</ToolButton>
                 <ToolButton onClick={() => insertSnippet('<ul>\n  <li>First point</li>\n  <li>Second point</li>\n</ul>')}>List</ToolButton>
                 <ToolButton onClick={() => insertSnippet('<blockquote>Important insight or quote here.</blockquote>')}>Quote</ToolButton>
-                <ToolButton onClick={() => insertSnippet('<a href="https://www.hbeedigitals.com/contact" target="_blank" rel="noopener">Request a Growth Review</a>')}>Link</ToolButton>
+                <ToolButton onClick={() => insertSnippet('<a href="https://hbeedigitals.com/contact" target="_blank" rel="noopener">Request a Growth Review</a>')}>Link</ToolButton>
               </div>
 
               <Textarea label="HTML Content" value={content} setValue={setContent} rows={24} mono />
@@ -239,14 +252,47 @@ export default function BlogPostEditor({
             <Input label="Focus Keyword" value={focusKeyword} setValue={setFocusKeyword} />
             <Input label="OG Title" value={ogTitle} setValue={setOgTitle} />
             <Textarea label="OG Description" value={ogDescription} setValue={setOgDescription} rows={3} />
+            <Input
+              label="OG Image URL"
+              value={ogImage}
+              setValue={setOgImage}
+              placeholder={finalFeaturedImage || 'Defaults to featured image'}
+            />
+            <Input
+              label="Canonical URL"
+              value={canonicalUrl}
+              setValue={setCanonicalUrl}
+              placeholder={`${SITE_URL}/blog/${finalSlug || 'your-slug'}`}
+            />
 
             <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-section)] p-4 text-sm text-[var(--text-muted)]">
-              OG image automatically uses the featured image:
+              Leave OG Image and Canonical URL empty to auto-generate them from the
+              featured image and slug:
               <br />
               <span className="break-all font-bold text-[var(--accent)]">
-                {finalFeaturedImage || 'Upload or paste featured image first'}
+                {ogImage.trim() || finalFeaturedImage || 'Upload or paste featured image first'}
               </span>
             </div>
+          </Card>
+
+          <Card title="Article CTA">
+            <p className="text-sm text-[var(--text-muted)]">
+              Shown at the end of the article. Both fields must be filled to
+              replace the default CTA, otherwise the generic growth-review CTA is
+              used.
+            </p>
+            <Input
+              label="CTA Text"
+              value={ctaText}
+              setValue={setCtaText}
+              placeholder="e.g. Book a Shopify audit"
+            />
+            <Input
+              label="CTA Link"
+              value={ctaLink}
+              setValue={setCtaLink}
+              placeholder="/contact or https://..."
+            />
           </Card>
 
           <button
@@ -286,14 +332,15 @@ export default function BlogPostEditor({
 
             <Input label="Featured Badge" value={featuredBadge} setValue={setFeaturedBadge} />
 
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-section)] p-4">
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                Read Time
-              </p>
-              <p className="mt-2 text-xl font-black text-[var(--text-primary)]">
-                {readTime}
-              </p>
-            </div>
+            <Input
+              label="Read Time"
+              value={readTimeInput}
+              setValue={setReadTimeInput}
+              placeholder={`Auto: ${readTime}`}
+            />
+            <p className="text-xs text-[var(--text-muted)]">
+              Leave empty to use the auto-estimate ({readTime}).
+            </p>
           </Card>
 
           <Card title="Preview">
@@ -332,10 +379,12 @@ function Input({
   label,
   value,
   setValue,
+  placeholder,
 }: {
   label: string
   value: string
   setValue: (value: string) => void
+  placeholder?: string
 }) {
   return (
     <label className="block">
@@ -343,6 +392,7 @@ function Input({
       <input
         value={value}
         onChange={(e) => setValue(e.target.value)}
+        placeholder={placeholder}
         className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-section)] p-3 text-[var(--text-primary)] outline-none focus:border-[var(--accent)]"
       />
     </label>

@@ -24,6 +24,11 @@ type EditorPost = {
   focus_keyword?: string
   og_title?: string
   og_description?: string
+  og_image?: string
+  canonical_url?: string
+  read_time?: string
+  cta_text?: string
+  cta_link?: string
   published_at?: string | null
 }
 
@@ -47,6 +52,11 @@ function normalizePost(data: any): EditorPost {
     focus_keyword: data.focus_keyword || '',
     og_title: data.og_title || '',
     og_description: data.og_description || '',
+    og_image: data.og_image || '',
+    canonical_url: data.canonical_url || '',
+    read_time: data.read_time || '',
+    cta_text: data.cta_text || '',
+    cta_link: data.cta_link || '',
     published_at: data.published_at || null,
   }
 }

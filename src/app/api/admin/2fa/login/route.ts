@@ -56,18 +56,20 @@ export async function POST(request: Request) {
 
     console.log('🔍 2FA Login attempt for userId:', userId)
 
-    const { supabaseAdmin: adminClient, supabaseAnon: anonClient } = getSupabaseClients()
+    const { supabaseAdmin: adminClient } = getSupabaseClients()
 
-    if (!anonClient) {
-      console.error('❌ Supabase anon client not available')
+    if (!adminClient) {
+      console.error('❌ Supabase service-role client not available')
       return NextResponse.json(
         { success: false, error: 'Server configuration error' },
         { status: 500 }
       )
     }
 
-    // 1. Get user's 2FA secret (using anon client)
-    const { data: twoFAData, error: twoFAError } = await anonClient
+    // 1. Get user's 2FA secret — read with the SERVICE-ROLE client only.
+    //    The TOTP secret / backup codes must never be reachable via the
+    //    public anon client (admin_2fa is locked down by RLS).
+    const { data: twoFAData, error: twoFAError } = await adminClient
       .from('admin_2fa')
       .select('secret, is_enabled')
       .eq('user_id', userId)

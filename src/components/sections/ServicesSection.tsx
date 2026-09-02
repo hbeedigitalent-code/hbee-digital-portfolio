@@ -148,17 +148,15 @@ export default function ServicesSection({
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.4 }}
-          className="text-center mb-10 md:mb-12"
+          className="text-center mb-12 md:mb-14"
         >
-          <div className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-orange)]/10 px-3 py-1 mb-3">
-            <span className="text-[10px] font-semibold text-[var(--accent-orange)] uppercase tracking-wider">
-              SERVICES OVERVIEW
-            </span>
-          </div>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-3 max-w-4xl mx-auto">
+          <p className="text-[length:var(--fs-eyebrow)] font-semibold uppercase tracking-[var(--ls-eyebrow)] text-[var(--accent-orange)]">
+            Services
+          </p>
+          <h2 className="mx-auto mt-3 max-w-3xl text-[length:var(--fs-h1)] font-semibold leading-[var(--lh-h1)] tracking-[var(--ls-h1)] text-white">
             {title}
           </h2>
-          <p className="text-sm md:text-base text-[var(--text-on-dark-muted)] max-w-2xl mx-auto">
+          <p className="mx-auto mt-4 max-w-2xl text-[length:var(--fs-body-lg)] leading-[var(--lh-body-lg)] text-[var(--text-on-dark-muted)]">
             {subtitle}
           </p>
         </motion.div>
@@ -179,27 +177,27 @@ export default function ServicesSection({
               <motion.div
                 key={service.id}
                 variants={itemVariants}
-                className="group p-5 rounded-xl bg-[var(--bg-navy-mid)]/50 border border-[var(--border)]/20 transition-all duration-300 hover:border-[var(--accent-orange)]/30 hover:bg-[var(--bg-navy-mid)]"
+                className="group flex flex-col p-6 rounded-[var(--radius-card)] bg-[var(--bg-navy-mid)]/40 border border-white/10 transition-all duration-300 hover:-translate-y-1 hover:border-[var(--accent-orange)]/40 hover:bg-[var(--bg-navy-mid)]"
               >
-                <Link href={href}>
-                  <div className="w-12 h-12 rounded-lg bg-[var(--accent-orange)]/10 flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-105 group-hover:bg-[var(--accent-orange)]/20">
+                <Link href={href} className="mb-5 w-fit">
+                  <div className="w-12 h-12 rounded-[var(--radius-control)] bg-[var(--accent-orange)]/10 flex items-center justify-center transition-all duration-300 group-hover:scale-105 group-hover:bg-[var(--accent-orange)]/20">
                     <SvgIcon name={iconName} size={24} color="var(--accent-orange)" />
                   </div>
                 </Link>
 
                 <Link href={href}>
-                  <h3 className="text-lg font-bold text-white mb-2 transition-all duration-300 group-hover:text-[var(--accent-orange)]">
+                  <h3 className="text-lg font-bold text-white mb-2 transition-colors duration-300 group-hover:text-[var(--accent-orange)]">
                     {service.title}
                   </h3>
                 </Link>
 
-                <p className="text-[var(--text-on-dark-muted)] text-sm leading-relaxed mb-4 line-clamp-3">
+                <p className="text-[var(--text-on-dark-muted)] text-sm leading-relaxed mb-5 line-clamp-3">
                   {service.full_description || service.description || service.short_description}
                 </p>
 
                 <Link
                   href={href}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent-orange)] transition-all duration-300 group-hover:gap-2"
+                  className="mt-auto inline-flex w-fit items-center gap-1.5 text-sm font-medium text-[var(--accent-orange)] transition-all duration-300 group-hover:gap-2"
                 >
                   Learn More
                   <SvgIcon name="arrow-right" size={12} color="var(--accent-orange)" />
