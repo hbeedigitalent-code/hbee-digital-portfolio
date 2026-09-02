@@ -19,6 +19,11 @@ interface BlogCommentsProps {
   postSlug: string
 }
 
+// Temporary safety mitigation: unauthenticated comment submission is disabled
+// while proper spam protection (verification + rate limiting) is built.
+// Approved comments stay visible. Do not flip this without the follow-up work.
+const COMMENTS_OPEN: boolean = false
+
 export default function BlogComments({ postSlug }: BlogCommentsProps) {
   const [comments, setComments] = useState<Comment[]>([])
   const [loading, setLoading] = useState(true)
@@ -47,6 +52,9 @@ export default function BlogComments({ postSlug }: BlogCommentsProps) {
 
   async function handleSubmitComment(e: React.FormEvent) {
     e.preventDefault()
+
+    // Hard stop: no unauthenticated writes while comments are closed.
+    if (!COMMENTS_OPEN) return
 
     if (!name.trim() || !commentText.trim()) {
       setSubmitStatus('error')
@@ -131,6 +139,22 @@ export default function BlogComments({ postSlug }: BlogCommentsProps) {
         </p>
       )}
 
+      {!COMMENTS_OPEN ? (
+        <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6 text-center">
+          <SvgIcon name="comment" size={24} color="var(--text-muted)" className="mx-auto mb-3" />
+          <p className="text-sm font-semibold text-[var(--text-primary)]">
+            Comments are temporarily closed
+          </p>
+          <p className="mx-auto mt-1 max-w-md text-xs leading-6 text-[var(--text-muted)]">
+            We&apos;re improving how comments work. Existing comments stay visible. Have a
+            question about your store?{' '}
+            <a href="/contact" className="font-semibold text-[var(--accent)] underline">
+              Contact us
+            </a>
+            .
+          </p>
+        </div>
+      ) : (
       <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6">
         <h4 className="mb-1 text-lg font-bold text-[var(--text-primary)]">Leave a comment</h4>
         <p className="mb-5 text-xs text-[var(--text-muted)]">
@@ -201,6 +225,7 @@ export default function BlogComments({ postSlug }: BlogCommentsProps) {
           </div>
         </form>
       </div>
+      )}
     </section>
   )
 }

@@ -4,28 +4,21 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 
-import Navbar from '@/components/Navbar'
-import Footer from '@/components/Footer'
-
-import HeroSection from '@/components/sections/HeroSection'
+import Hero from '@/components/home/Hero'
 import AboutSection from '@/components/sections/AboutSection'
 import CTASection from '@/components/sections/CTASection'
 import FeaturedPortfolioSection from '@/components/sections/FeaturedPortfolioSection'
 
 import TrustedTechnologies from '@/components/home/TrustedTechnologies'
+import TrustedBy from '@/components/home/TrustedBy'
 import BeforeAfterPreview from '@/components/home/BeforeAfterPreview'
-import ReviewCarousel from '@/components/home/ReviewCarousel'
-import TrustStack from '@/components/home/TrustStack'
 
-import PartnerMarquee from '@/components/home/PartnerMarquee'
 import ServicesSection from '@/components/sections/ServicesSection'
 import TestimonialsSection from '@/components/sections/TestimonialsSection'
 import FAQSection from '@/components/sections/FAQSection'
 
 import Reveal from '@/components/Reveal'
 import StatsBar from '@/components/ui/StatsBar'
-import TabSwitcher from '@/components/ui/TabSwitcher'
-import GridPattern from '@/components/ui/GridPattern'
 import SvgIcon from '@/components/ui/SvgIcon'
 import Button from '@/components/ui/Button'
 
@@ -43,9 +36,9 @@ function normalizeArray(value: any): string[] {
   return []
 }
 
-export default function HomePageClient() {
+export default function HomePageClient({ initialHero }: { initialHero?: any } = {}) {
   const [mounted, setMounted] = useState(false)
-  const [hero, setHero] = useState<any>({})
+  const [hero, setHero] = useState<any>(initialHero ?? {})
   const [about, setAbout] = useState<any>({})
   const [faqs, setFaqs] = useState<any[]>([])
   const [cta, setCta] = useState<any>({})
@@ -89,7 +82,7 @@ export default function HomePageClient() {
   async function fetchPortfolioItems() {
     let { data: allItems } = await supabase
       .from('portfolio_items')
-      .select('id,title,name,client_name,slug,category,industry,project_type,description,image_url,featured_image,metric_value,metric_label,before_image,after_image,is_before_after,is_active,display_order,featured')
+      .select('id,title,name,client_name,slug,category,industry,project_type,description,image_url,featured_image,metric_value,metric_label,before_image,after_image,is_before_after,is_active,display_order,featured,url,live_url,website_url,project_url')
       .eq('is_active', true)
       .order('display_order', { ascending: true })
       .limit(30)
@@ -103,127 +96,81 @@ export default function HomePageClient() {
     { value: '98', label: 'Client Satisfaction', icon: 'analytics', description: 'Focused on measurable client success.' },
   ]
 
-  const whyChooseUsItems = [
-    {
-      id: 'strategy',
-      title: 'Strategy First',
-      icon: 'strategy',
-      description: 'We structure digital systems around trust, clarity, conversion, and long-term growth.',
-      points: ['Growth-focused planning', 'Clear brand positioning', 'Conversion-first user journey'],
-    },
-    {
-      id: 'execution',
-      title: 'Premium Execution',
-      icon: 'web-development',
-      description: 'Every layout and interaction is built to feel clean, modern, responsive, and credible.',
-      points: ['Mobile-first interface', 'Premium visual hierarchy', 'Fast and clean implementation'],
-    },
-    {
-      id: 'optimization',
-      title: 'Optimization',
-      icon: 'growth',
-      description: 'We improve how visitors move, trust, and take action instead of only making the website look good.',
-      points: ['Better conversion flow', 'Improved page experience', 'Trust-focused content structure'],
-    },
-    {
-      id: 'support',
-      title: 'Long-Term Support',
-      icon: 'support',
-      description: 'We help brands keep improving after launch with guidance, updates, and practical support.',
-      points: ['Technical support', 'Performance monitoring', 'Scalable improvement plan'],
-    },
-  ]
-
   const hasAboutContent = about && (about.title || about.subtitle || about.description || about.image_url)
 
   if (!mounted) {
     return (
-      <div className="relative overflow-hidden bg-white text-navy-900">
-        <Navbar />
+      <div className="relative overflow-hidden bg-[var(--bg)] text-[var(--text)]">
         <main className="relative z-10">
           <div className="min-h-[80vh] bg-gradient-to-r from-navy-900 to-navy-800" />
-          <div className="bg-gray-50 px-5 py-8">
+          <div className="bg-[var(--bg-subtle)] px-5 py-8">
             <div className="mx-auto max-w-7xl">
               <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                 {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="rounded-xl bg-white p-5 animate-pulse">
-                    <div className="h-8 w-16 bg-gray-100 rounded-lg mb-2" />
-                    <div className="h-4 w-24 bg-gray-100 rounded-lg" />
+                  <div key={i} className="rounded-xl bg-[var(--surface)] p-5 animate-pulse">
+                    <div className="h-8 w-16 bg-[var(--bg-subtle)] rounded-lg mb-2" />
+                    <div className="h-4 w-24 bg-[var(--bg-subtle)] rounded-lg" />
                   </div>
                 ))}
               </div>
             </div>
           </div>
         </main>
-        <Footer />
       </div>
     )
   }
 
   return (
-    <div className="relative overflow-hidden bg-white text-navy-900">
-      <Navbar />
-
+    <div className="relative overflow-hidden bg-[var(--bg)] text-[var(--text)]">
       <main className="relative z-10">
         {/* 1. Hero */}
-        <HeroSection
+        <Hero
           data={{
+            eyebrow: hero.welcome_text,
             title: hero.title,
+            phrases: hero.feature_bullets,
             subtitle: hero.subtitle,
-            primaryCtaText: hero.primary_cta_text || 'Get Free Consultation',
-            primaryCtaLink: hero.primary_cta_link || '/contact',
-            secondaryCtaText: hero.secondary_cta_text || 'View Case Studies',
-            secondaryCtaLink: hero.secondary_cta_link || '/portfolio',
-            backgroundImage: hero.background_image,
-            featureBullets: hero.feature_bullets || 'Shopify Optimization|Conversion Systems|Accessibility Support',
-            ...(hero.video_url ? { video_url: hero.video_url } : {}),
+            image: hero.background_image,
+            video: hero.video_url,
           }}
         />
 
         {/* 2. Stats */}
-        <section className="relative bg-[var(--bg-section)] px-5 py-8">
+        <section className="relative bg-[var(--bg-section)] px-5 py-12 sm:py-16">
           <div className="mx-auto max-w-7xl">
             <StatsBar stats={statsData} />
           </div>
         </section>
 
-        {/* 3. Partner Logos */}
-        <section className="relative bg-[var(--bg-page)] px-5 py-8">
-          <div className="mx-auto max-w-7xl">
-            <PartnerMarquee />
-          </div>
-        </section>
+        {/* 3. Partners & Technologies */}
+        <TrustedTechnologies />
 
         {/* 4. Services */}
         <ServicesSection services={services} />
 
-        {/* 5. Trusted Technologies */}
-        <TrustedTechnologies />
-
-        {/* 6. Before & After */}
+        {/* 5. Transformation — Before & After */}
         <BeforeAfterPreview items={portfolioItems} />
 
-        {/* 7. Featured Portfolio */}
+        {/* 6. CTA #2 — between the transformation and the portfolio */}
+        <CTASection
+          data={{
+            title: cta.title,
+            subtitle: cta.subtitle,
+            buttonText: cta.button_text,
+            buttonLink: cta.button_link,
+          }}
+        />
+
+        {/* 7. Portfolio */}
         <FeaturedPortfolioSection items={portfolioItems} />
 
-        {/* 8. Trust Stack */}
-        <TrustStack />
+        {/* 7b. We are trusted by */}
+        <TrustedBy />
 
-        {/* 9. Testimonials */}
+        {/* 8. Testimonials */}
         <TestimonialsSection />
 
-        {/* 10. Review Carousel */}
-        <ReviewCarousel />
-
-        {/* 11. Why Choose Us */}
-        <section className="relative bg-[var(--bg-page)] px-5 py-16">
-          <GridPattern />
-          <div className="relative z-10 mx-auto max-w-7xl">
-            <TabSwitcher items={whyChooseUsItems} />
-          </div>
-        </section>
-
-        {/* 12. About */}
+        {/* 9. About */}
         {hasAboutContent && (
           <section className="relative bg-[var(--bg-section)]">
             <Reveal>
@@ -251,18 +198,16 @@ export default function HomePageClient() {
           </section>
         )}
 
-        {/* 13. Pricing - REMOVED */}
-
-        {/* 14. FAQ */}
-        <FAQSection 
-          faqs={faqs} 
+        {/* 10. FAQ */}
+        <FAQSection
+          faqs={faqs}
           variant="home"
           title="Everything You Need to Know"
           subtitle="Clear answers about our ecommerce, branding, website, content, and growth support services."
           limit={6}
         />
 
-        {/* 15. CTA Section */}
+        {/* 11. CTA #1 — existing final CTA */}
         <section className="relative bg-[var(--bg-navy)] px-5 py-16">
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full bg-[var(--accent)]/8 blur-[100px]" />
@@ -300,8 +245,6 @@ export default function HomePageClient() {
           </div>
         </section>
       </main>
-
-      <Footer />
     </div>
   )
 }

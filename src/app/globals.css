@@ -3,9 +3,11 @@
 @tailwind utilities;
 
 /* ─────────────────────────────────────────────
-   FONT SYSTEM - INTER
+   FONT SYSTEM
+   Inter is loaded ONCE via next/font/google in src/app/layout.tsx
+   (exposed as the CSS variable --font-inter). Do not add @import or
+   <link> font loading anywhere else.
    ───────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&display=swap');
 
 * {
   box-sizing: border-box;
@@ -13,30 +15,186 @@
 
 html {
   scroll-behavior: smooth;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
 }
 
-/* ─────────────────────────────────────────────
-   NEW COLOR SYSTEM (Based on Audit)
-   ───────────────────────────────────────────── */
+/* ═════════════════════════════════════════════════════════════════
+   PHASE 02 — SEMANTIC DESIGN TOKENS (single source of truth)
+
+   Brand system: deep navy + blue interaction accent + orange
+   conversion CTA. There is NO green/lime/cyan brand colour.
+
+   Legacy tokens (--bg-page, --text-primary, --accent-orange, …) are
+   kept below as ALIASES that resolve to these semantic tokens so
+   existing components keep working. They will be migrated away in
+   Phase 03+.
+   ═════════════════════════════════════════════════════════════════ */
 :root {
-  /* Navy Scale - Primary brand color */
-  --navy-900: #0B1628;
-  --navy-800: #1A2B47;
-  --navy-700: #2A3F5F;
-  --navy-600: #3A5377;
+  /* ---------- Backgrounds ---------- */
+  --bg: #FFFFFF;
+  --bg-subtle: #F6F8FB;
+  --surface: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --bg-inverse: #0B1220;
 
-  /* Orange Accent - CTAs only */
-  --orange-500: #F97316;
-  --orange-600: #EA580C;
-  --orange-50: #FFF7ED;
+  /* ---------- Text ---------- */
+  --text: #0B1220;
+  --text-secondary: #48566B;
+  --text-muted: #6B7688;
+  --text-on-inverse: #F2F5FA;
 
-  /* Blue Accent - Secondary actions, links */
-  --blue-500: #3B82F6;
-  --blue-600: #2563EB;
+  /* ---------- Borders ---------- */
+  --border: #E4E8EF;
+  --border-strong: #CBD3DF;
+
+  /* ---------- Accent (interaction: links, focus, secondary actions) ---------- */
+  --accent: #2563EB;
+  --accent-hover: #1D4ED8;
+  --accent-subtle: rgba(37, 99, 235, 0.08);
+
+  /* ---------- CTA (reserved for primary conversion actions) ---------- */
+  --cta: #EA580C;
+  --cta-hover: #C2410C;
+  --cta-text: #FFFFFF;
+
+  /* ---------- Status ---------- */
+  --success: #15803D;
+  --warning: #B45309;
+  --error: #DC2626;
+  --success-subtle: rgba(21, 128, 61, 0.10);
+  --warning-subtle: rgba(180, 83, 9, 0.12);
+  --error-subtle: rgba(220, 38, 38, 0.10);
+
+  /* ---------- Focus ring ---------- */
+  --ring: rgba(37, 99, 235, 0.45);
+
+  /* ---------- Radius ---------- */
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-large: 20px;
+
+  /* ---------- Elevation (three levels: card / popover / modal) ---------- */
+  --shadow-sm: 0 1px 2px rgba(11, 18, 32, 0.06), 0 1px 3px rgba(11, 18, 32, 0.09);
+  --shadow-md: 0 4px 12px rgba(11, 18, 32, 0.08), 0 2px 6px rgba(11, 18, 32, 0.05);
+  --shadow-lg: 0 16px 40px rgba(11, 18, 32, 0.14), 0 6px 16px rgba(11, 18, 32, 0.08);
+
+  /* ---------- Layout ---------- */
+  --container: 1200px;
+  --container-wide: 1320px;
+  --gutter-mobile: 20px;
+  --gutter-tablet: 32px;
+  --gutter-desktop: 48px;
+  --space-section: clamp(64px, 8vw, 112px);
+  --space-section-compact: clamp(48px, 6vw, 80px);
+
+  /* ---------- Motion ---------- */
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-hover: 150ms;
+  --dur-press: 100ms;
+  --dur-entrance: 300ms;
+  --dur-reveal: 400ms;
+
+  /* ---------- Typography ----------
+     --font-inter is provided by next/font/google (see layout.tsx).
+     The literal 'Inter' fallback covers the pre-hydration edge. */
+  --font-sans: var(--font-inter, 'Inter'), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  --fs-display: clamp(2.75rem, 5vw, 4rem);
+  --lh-display: 1.04;
+  --ls-display: -0.03em;
+
+  --fs-h1: clamp(2.25rem, 4vw, 3rem);
+  --lh-h1: 1.08;
+  --ls-h1: -0.025em;
+
+  --fs-h2: clamp(1.75rem, 3vw, 2.25rem);
+  --lh-h2: 1.15;
+  --ls-h2: -0.02em;
+
+  --fs-h3: 1.375rem;
+  --lh-h3: 1.25;
+  --ls-h3: -0.015em;
+
+  --fs-h4: 1.125rem;
+  --lh-h4: 1.35;
+  --ls-h4: -0.01em;
+
+  --fs-body-lg: 1.125rem;
+  --lh-body-lg: 1.65;
+
+  --fs-body: 1rem;
+  --lh-body: 1.6;
+
+  --fs-body-sm: 0.875rem;
+  --lh-body-sm: 1.55;
+
+  --fs-nav: 0.9375rem;
+  --lh-nav: 1;
+  --ls-nav: -0.01em;
+
+  --fs-button: 0.9375rem;
+  --lh-button: 1;
+  --ls-button: -0.01em;
+
+  --fs-eyebrow: 0.75rem;
+  --lh-eyebrow: 1;
+  --ls-eyebrow: 0.12em;
+
+  --fs-caption: 0.75rem;
+  --lh-caption: 1.4;
+
+  /* ═══════════ LEGACY COMPAT ALIASES ═══════════
+     Kept so current components render unchanged. Migrate + remove
+     in Phase 03+. Do not add new usages of these. */
+
+  /* backgrounds */
+  --bg-page: var(--bg);
+  --bg-section: var(--bg-subtle);
+  --bg-section-light: var(--bg-subtle);
+  --bg-section-dark: var(--bg-inverse);
+  --bg-card: var(--surface);
+  --bg-card-light: var(--surface);
+  --bg-card-dark: var(--bg-inverse);
+  --bg-card-hover: var(--bg-subtle);
+  --bg-navy: var(--bg-inverse);
+  --bg-navy-mid: #16233B;
+
+  /* text */
+  --text-primary: var(--text);
+  --text-on-dark: var(--text-on-inverse);
+  --text-on-dark-muted: #A9B4C4;
+  --text-inverse: var(--text-on-inverse);
+  --text-accent: var(--accent);
+  --btn-primary-text: #FFFFFF;
+  --primary-color: var(--accent);
+  --primary: var(--accent);
+
+  /* borders */
+  --border-light: var(--border);
+  --border-dark: var(--border-strong);
+
+  /* accent legacy — orange was historically (mis)named "lime"; it is the CTA colour */
+  --accent-orange: var(--cta);
+  --accent-orange-light: #FFF3EA;
+  --accent-lime: var(--cta); /* DEPRECATED — migrate call sites to --cta or --success, then remove */
+
+  /* navy scale (legacy refs in HeroSection / HomePageClient / .btn-* / .text-gradient) */
+  --navy-900: #0B1220;
+  --navy-800: #16233B;
+  --navy-700: #1D2E4B;
+  --navy-600: #2A3F5F;
+
+  /* orange scale (legacy refs in .btn-cta) */
+  --orange-50: #FFF3EA;
+  --orange-500: var(--cta);
+  --orange-600: var(--cta-hover);
+
+  /* blue scale (legacy refs in HeroSection typewriter) */
   --blue-50: #EFF6FF;
+  --blue-500: var(--accent);
+  --blue-600: var(--accent-hover);
 
-  /* Gray Scale - Backgrounds, borders */
+  /* gray scale (legacy refs in scrollbar + a few components) */
   --gray-50: #F8FAFC;
   --gray-100: #F1F5F9;
   --gray-200: #E2E8F0;
@@ -48,84 +206,186 @@ html {
   --gray-800: #1E293B;
   --gray-900: #0F172A;
 
-  /* Text Colors */
-  --text-primary: #0B1628;
-  --text-secondary: #475569;
-  --text-muted: #64748B;
-  --text-on-dark: #FFFFFF;
-  --text-on-dark-muted: #94A3B8;
+  /* legacy shadows */
+  --shadow-xl: var(--shadow-lg);
+  --shadow-card: var(--shadow-sm);
+  --shadow-card-hover: var(--shadow-md);
 
-  /* Background Colors - Light Mode */
-  --bg-page: #FFFFFF;
-  --bg-section-light: #F8FAFC;
-  --bg-section-dark: #0B1628;
-  --bg-card-light: #FFFFFF;
-  --bg-card-dark: #1A2B47;
-
-  /* Border Colors */
-  --border-light: #E2E8F0;
-  --border-dark: rgba(255, 255, 255, 0.1);
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-card-hover: 0 8px 30px rgba(0, 0, 0, 0.12);
-
-  /* Spacing */
-  --section-padding-desktop: 96px;
+  /* legacy layout / spacing */
+  --container-max-width: var(--container);
+  --container-padding-mobile: var(--gutter-mobile);
+  --container-padding-desktop: var(--gutter-desktop);
   --section-padding-mobile: 64px;
-  --container-max-width: 1280px;
-  --container-padding-desktop: 48px;
-  --container-padding-mobile: 24px;
+  --section-padding-desktop: 96px;
   --card-gap: 24px;
-  --card-radius: 16px;
+  --card-radius: var(--radius-card);
   --card-padding: 32px;
 
-  /* Transitions */
-  --transition-fast: 150ms ease;
-  --transition-normal: 200ms ease;
-  --transition-slow: 300ms ease;
+  /* legacy transitions */
+  --transition-fast: var(--dur-press) ease;
+  --transition-normal: var(--dur-hover) ease;
+  --transition-slow: var(--dur-entrance) ease;
+}
 
-  /* Legacy compatibility - Keep existing variables */
-  --bg-page: #FFFFFF;
-  --bg-section: #F8FAFC;
-  --bg-card: #FFFFFF;
-  --bg-card-hover: #F1F5F9;
-  --bg-navy: #0B1628;
-  --bg-navy-mid: #1A2B47;
-  --border: #E2E8F0;
-  --border-strong: #CBD5E1;
+/* ═════════════════════════════════════════════════════════════════
+   DARK THEME
+   Applied via the .dark class OR [data-theme="dark"] — both are set
+   by the ThemeProvider (src/context/ThemeContext.tsx).
+   Only base semantic tokens are redefined here; the legacy aliases
+   above resolve through var() automatically.
+   ═════════════════════════════════════════════════════════════════ */
+.dark,
+[data-theme='dark'] {
+  --bg: #0B1220;
+  --bg-subtle: #0F1A2E;
+  --surface: #16233B;
+  --surface-raised: #1D2E4B;
+  --bg-inverse: #0B1220;
+
+  --text: #F2F5FA;
+  --text-secondary: #A9B4C4;
+  --text-muted: #7C899C;
+  --text-on-inverse: #F2F5FA;
+
+  --border: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.20);
+
   --accent: #3B82F6;
-  --accent-lime: #F97316;
-  --accent-orange: #F97316;
-  --accent-orange-light: #FFF7ED;
+  --accent-hover: #60A5FA;
+  --accent-subtle: rgba(59, 130, 246, 0.14);
+
+  --cta: #F97316;
+  --cta-hover: #EA580C;
+  --cta-text: #FFFFFF;
+
+  --success: #4ADE80;
+  --warning: #FBBF24;
+  --error: #F87171;
+  --success-subtle: rgba(74, 222, 128, 0.14);
+  --warning-subtle: rgba(251, 191, 36, 0.16);
+  --error-subtle: rgba(248, 113, 113, 0.14);
+
+  --ring: rgba(96, 165, 250, 0.55);
+
+  /* legacy dark overrides that were previously hand-tuned */
+  --bg-card-hover: #1D2E4B;
+  --bg-navy-mid: #1D2E4B;
+  --text-on-dark-muted: #A9B4C4;
+  --navy-800: #1D2E4B;
 }
 
 /* ─────────────────────────────────────────────
-   DARK MODE
+   SEMANTIC TYPOGRAPHY UTILITIES (opt-in; unused until Phase 03)
    ───────────────────────────────────────────── */
-.dark {
-  --text-primary: #FFFFFF;
-  --text-secondary: #94A3B8;
-  --text-muted: #64748B;
-  --text-on-dark: #FFFFFF;
-  --text-on-dark-muted: #94A3B8;
-  --bg-page: #0B1628;
-  --bg-section: #0F172A;
-  --bg-card: #1A2B47;
-  --bg-card-hover: #2A3F5F;
-  --border: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.2);
+.t-display {
+  font-family: var(--font-sans);
+  font-size: var(--fs-display);
+  line-height: var(--lh-display);
+  letter-spacing: var(--ls-display);
+  font-weight: 700;
+  color: var(--text);
+}
+.t-h1 {
+  font-family: var(--font-sans);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  letter-spacing: var(--ls-h1);
+  font-weight: 700;
+  color: var(--text);
+}
+.t-h2 {
+  font-family: var(--font-sans);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  letter-spacing: var(--ls-h2);
+  font-weight: 600;
+  color: var(--text);
+}
+.t-h3 {
+  font-family: var(--font-sans);
+  font-size: var(--fs-h3);
+  line-height: var(--lh-h3);
+  letter-spacing: var(--ls-h3);
+  font-weight: 600;
+  color: var(--text);
+}
+.t-h4 {
+  font-family: var(--font-sans);
+  font-size: var(--fs-h4);
+  line-height: var(--lh-h4);
+  letter-spacing: var(--ls-h4);
+  font-weight: 600;
+  color: var(--text);
+}
+.t-body-lg {
+  font-size: var(--fs-body-lg);
+  line-height: var(--lh-body-lg);
+  font-weight: 400;
+}
+.t-body {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: 400;
+}
+.t-body-sm {
+  font-size: var(--fs-body-sm);
+  line-height: var(--lh-body-sm);
+  font-weight: 400;
+}
+.t-nav {
+  font-size: var(--fs-nav);
+  line-height: var(--lh-nav);
+  letter-spacing: var(--ls-nav);
+  font-weight: 500;
+}
+.t-button {
+  font-size: var(--fs-button);
+  line-height: var(--lh-button);
+  letter-spacing: var(--ls-button);
+  font-weight: 600;
+}
+.t-eyebrow {
+  font-size: var(--fs-eyebrow);
+  line-height: var(--lh-eyebrow);
+  letter-spacing: var(--ls-eyebrow);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.t-caption {
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+  font-weight: 400;
+}
+
+/* ─────────────────────────────────────────────
+   HERO FLUID — static-fallback drift (used only when the
+   WebGL shader is unavailable). GPU-friendly transform;
+   disabled automatically by the reduced-motion block below.
+   ───────────────────────────────────────────── */
+@keyframes hero-fluid-drift {
+  0%   { transform: scale(1.06) translate3d(-1.5%, -1%, 0); }
+  100% { transform: scale(1.12) translate3d(2%, 1.5%, 0); }
+}
+
+/* ─────────────────────────────────────────────
+   REDUCED MOTION
+   ───────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ─────────────────────────────────────────────
    BASE STYLES
    ───────────────────────────────────────────── */
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 400;
   line-height: 1.6;
@@ -136,7 +396,7 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-sans);
   color: var(--text-primary);
   font-weight: 700;
   margin: 0;

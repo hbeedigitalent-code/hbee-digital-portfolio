@@ -78,6 +78,18 @@ export default function HeroEditor() {
     }
   }
 
+  const applyRedesignedDefaults = () => {
+    if (!hero) return
+    setHero({
+      ...hero,
+      welcome_text: 'Digital Growth Studio',
+      title: 'We build the digital systems that grow',
+      feature_bullets: 'Ambitious Brands|E-commerce Teams|Growth Companies|Better Experiences',
+      subtitle: 'Strategy, design and build for e-commerce and modern teams.',
+    })
+    setMessage({ type: 'success', text: 'Redesigned defaults filled in — press Save Changes to publish.' })
+  }
+
   const handleSave = async () => {
     if (!hero) return
     setSaving(true)
@@ -166,26 +178,51 @@ export default function HeroEditor() {
             <h2 className="text-2xl font-bold text-gray-900">Hero Section Content</h2>
           </div>
 
+          <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+            <p className="font-semibold">These fields control the redesigned homepage Hero.</p>
+            <p className="mt-1">
+              Leave a field <span className="font-medium">blank</span> to use its built-in default. The homepage headline reads as
+              <span className="font-medium"> &ldquo;{`{Headline Prefix}`} {`{rotating phrase}`}&rdquo;</span>.
+            </p>
+            <ul className="mt-2 list-disc space-y-0.5 pl-5">
+              <li><span className="font-medium">Eyebrow</span> default: &ldquo;Digital Growth Studio&rdquo;</li>
+              <li><span className="font-medium">Headline Prefix</span> default: &ldquo;We build the digital systems that grow&rdquo;</li>
+              <li><span className="font-medium">Rotating Phrases</span> default: &ldquo;Ambitious Brands | E-commerce Teams | Growth Companies | Better Experiences&rdquo;</li>
+              <li><span className="font-medium">Subtitle</span> default: &ldquo;Strategy, design and build for e-commerce and modern teams.&rdquo;</li>
+            </ul>
+            <p className="mt-2">
+              This row still holds pre-redesign copy (&ldquo;Engineering Growth For&rdquo;, &ldquo;Brand Identity|24/7 Support&rdquo;). The homepage
+              ignores those specific legacy values and shows the redesigned defaults until you publish new content here.
+            </p>
+            <button
+              type="button"
+              onClick={applyRedesignedDefaults}
+              className="mt-3 inline-flex items-center rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              Fill in redesigned defaults
+            </button>
+          </div>
+
           <div className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Welcome Text <span className="text-gray-400 font-normal">(shows before company name)</span></label>
-              <input type="text" value={hero?.welcome_text || ''} onChange={(e) => setHero({ ...hero!, welcome_text: e.target.value })} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Welcome to" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Eyebrow <span className="text-gray-400 font-normal">(small label above the headline)</span></label>
+              <input type="text" value={hero?.welcome_text || ''} onChange={(e) => setHero({ ...hero!, welcome_text: e.target.value })} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Digital Growth Studio" />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Main Title</label>
-              <input type="text" value={hero?.title || ''} onChange={(e) => setHero({ ...hero!, title: e.target.value })} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Headline Prefix <span className="text-gray-400 font-normal">(fixed text shown before the rotating phrase)</span></label>
+              <input type="text" value={hero?.title || ''} onChange={(e) => setHero({ ...hero!, title: e.target.value })} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="We build the digital systems that grow" />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Subtitle</label>
-              <textarea value={hero?.subtitle || ''} onChange={(e) => setHero({ ...hero!, subtitle: e.target.value })} rows={3} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+              <textarea value={hero?.subtitle || ''} onChange={(e) => setHero({ ...hero!, subtitle: e.target.value })} rows={3} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Strategy, design and build for e-commerce and modern teams." />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Feature Bullets <span className="text-gray-400 font-normal">(separate with | character)</span></label>
-              <input type="text" value={hero?.feature_bullets || ''} onChange={(e) => setHero({ ...hero!, feature_bullets: e.target.value })} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Web Development|UI/UX Design|Digital Marketing|Brand Strategy" />
-              <p className="text-xs text-gray-500 mt-1">These slide in one by one on the hero section</p>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rotating Phrases <span className="text-gray-400 font-normal">(separate with | character)</span></label>
+              <input type="text" value={hero?.feature_bullets || ''} onChange={(e) => setHero({ ...hero!, feature_bullets: e.target.value })} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" placeholder="Ambitious Brands|E-commerce Teams|Growth Companies|Better Experiences" />
+              <p className="text-xs text-gray-500 mt-1">Each phrase rotates one at a time after the headline prefix. Keep them short (1–3 words). Leave blank for the defaults.</p>
             </div>
 
             <div className="p-4 bg-gray-50 rounded-lg">

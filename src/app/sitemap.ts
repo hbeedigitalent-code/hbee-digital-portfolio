@@ -54,7 +54,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
       supabase
         .from('blog_posts')
-        .select('slug')
+        .select('slug, updated_at, published_at')
         .eq('status', 'published'),
     ])
 
@@ -81,12 +81,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const blogRoutes =
     blogPosts
       ?.filter((post) => post.slug)
-      .map((post) => ({
-        url: `${baseUrl}/blog/${post.slug}`,
-        lastModified: new Date(),
-        changeFrequency: 'weekly' as const,
-        priority: 0.78,
-      })) || []
+      .map((post) => {
+        // Real modification date only: updated_at, then published_at. If neither
+        // exists, omit lastModified rather than emit the crawl time as a fake date.
+        const lastMod = post.updated_at || post.published_at
+        return {
+          url: `${baseUrl}/blog/${post.slug}`,
+          ...(lastMod ? { lastModified: new Date(lastMod) } : {}),
+          changeFrequency: 'weekly' as const,
+          priority: 0.78,
+        }
+      }) || []
 
   return [
     ...staticRoutes.map((item) => ({

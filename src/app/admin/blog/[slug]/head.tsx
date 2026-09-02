@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.hbeedigitals.com'
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://hbeedigitals.com'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

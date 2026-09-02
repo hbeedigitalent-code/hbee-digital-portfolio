@@ -1,5 +1,14 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import SvgIcon from '@/components/ui/SvgIcon'
+
+// A 404 must never be indexed. Next.js already injects its own
+// `<meta name="robots" content="noindex">` for the not-found boundary, so here we
+// only need to clear the root layout's inherited `index: true` — setting it to
+// `null` removes that inherited value and leaves Next's single noindex directive.
+export const metadata: Metadata = {
+  robots: null,
+}
 
 export default function NotFound() {
   return (

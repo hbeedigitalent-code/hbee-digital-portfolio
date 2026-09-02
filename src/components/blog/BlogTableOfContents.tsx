@@ -11,13 +11,22 @@ interface TocItem {
 
 interface BlogTableOfContentsProps {
   content: string
+  /** Server-generated TOC. When provided, heading ids are already in the DOM
+   *  (see addHeadingIds) so no client-side parsing / id injection is needed. */
+  toc?: TocItem[]
 }
 
-export default function BlogTableOfContents({ content }: BlogTableOfContentsProps) {
+export default function BlogTableOfContents({ content, toc }: BlogTableOfContentsProps) {
   const [activeId, setActiveId] = useState('')
-  const [items, setItems] = useState<TocItem[]>([])
+  const [items, setItems] = useState<TocItem[]>(toc ?? [])
 
   useEffect(() => {
+    // Fast path: server already provided the TOC and injected matching ids.
+    if (toc) {
+      setItems(toc)
+      return
+    }
+
     const extracted: TocItem[] = []
     const tempDiv = document.createElement('div')
     tempDiv.innerHTML = content
@@ -49,7 +58,7 @@ export default function BlogTableOfContents({ content }: BlogTableOfContentsProp
         }
       })
     }, 100)
-  }, [content])
+  }, [content, toc])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -105,7 +114,8 @@ export default function BlogTableOfContents({ content }: BlogTableOfContentsProp
             <li key={item.id}>
               <button
                 onClick={() => scrollToHeading(item.id)}
-                className={`w-full text-left transition-colors py-1 ${
+                aria-current={activeId === item.id ? 'location' : undefined}
+                className={`w-full rounded-md text-left transition-colors py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-card)] ${
                   item.level === 3 ? 'pl-4 text-sm' : 'text-base font-medium'
                 } ${
                   activeId === item.id

@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import SvgIcon from '@/components/ui/SvgIcon'
 
-interface BlogPost {
+export interface RelatedPost {
   id: string
   title: string
   slug: string
@@ -22,6 +22,8 @@ interface BlogPost {
 interface RelatedPostsProps {
   currentSlug: string
   tags?: string[] | null
+  /** When provided (server-prefetched), the client-side query is skipped. */
+  initialPosts?: RelatedPost[]
 }
 
 function formatDate(date?: string | null) {
@@ -49,11 +51,14 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] } },
 }
 
-export default function RelatedPosts({ currentSlug, tags }: RelatedPostsProps) {
-  const [posts, setPosts] = useState<BlogPost[]>([])
-  const [loading, setLoading] = useState(true)
+export default function RelatedPosts({ currentSlug, tags, initialPosts }: RelatedPostsProps) {
+  const [posts, setPosts] = useState<RelatedPost[]>(initialPosts ?? [])
+  const [loading, setLoading] = useState(!initialPosts)
 
   useEffect(() => {
+    // Server already prefetched — do not fire a duplicate client-side query.
+    if (initialPosts) return
+
     async function fetchRelated() {
       setLoading(true)
 
@@ -89,7 +94,7 @@ export default function RelatedPosts({ currentSlug, tags }: RelatedPostsProps) {
     }
 
     fetchRelated()
-  }, [currentSlug, tags])
+  }, [currentSlug, tags, initialPosts])
 
   if (loading) {
     return (
@@ -125,7 +130,7 @@ export default function RelatedPosts({ currentSlug, tags }: RelatedPostsProps) {
           <motion.div key={post.id} variants={itemVariants}>
             <Link
               href={`/blog/${post.slug}`}
-              className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] transition-all duration-300 hover:-translate-y-1 hover:border-[var(--accent)]/40 hover:shadow-[var(--shadow-lg)]"
+              className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] transition-all duration-300 hover:-translate-y-1 hover:border-[var(--accent)]/40 hover:shadow-[var(--shadow-lg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]"
             >
               <div className="aspect-[1200/630] overflow-hidden bg-[var(--bg-section)]">
                 {post.featured_image ? (

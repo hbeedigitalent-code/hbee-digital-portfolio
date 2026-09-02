@@ -6,17 +6,18 @@ interface BlogAuthorBioProps {
   author?: string
   date?: string
   readTime?: string
-  featuredImage?: string | null
-  title?: string
 }
 
 export default function BlogAuthorBio({
   author = 'Hbee Digitals',
   date,
   readTime,
-  featuredImage,
-  title,
 }: BlogAuthorBioProps) {
+  const credential =
+    author === 'Hbee Digitals'
+      ? 'Ecommerce Growth Studio'
+      : 'Ecommerce growth strategist · Hbee Digitals'
+
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-muted)]">
       <div className="flex items-center gap-2.5">
@@ -24,8 +25,12 @@ export default function BlogAuthorBio({
           {(author || 'H').charAt(0).toUpperCase()}
         </div>
         <div className="flex flex-col">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+            Written by
+          </span>
           <span className="font-semibold text-[var(--text-primary)]">{author}</span>
-          <div className="flex items-center gap-2 text-xs">
+          <span className="text-xs text-[var(--text-muted)]">{credential}</span>
+          <div className="mt-0.5 flex items-center gap-2 text-xs">
             {date && (
               <span className="flex items-center gap-1">
                 <SvgIcon name="calendar" size={12} color="var(--text-muted)" />
@@ -41,10 +46,6 @@ export default function BlogAuthorBio({
           </div>
         </div>
       </div>
-
-      {featuredImage && title && (
-        <meta property="og:image" content={featuredImage} />
-      )}
     </div>
   )
 }
