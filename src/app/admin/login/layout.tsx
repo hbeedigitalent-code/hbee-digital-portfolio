@@ -48,6 +48,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [user, pathname])
 
   async function handleLogout() {
+    // NOTE: this layout only wraps /admin/login, and its own early return
+    // below (`if (pathname === '/admin/login') return <>{children}</>`)
+    // means the sidebar containing this button never actually renders here.
+    // Updated for consistency with admin/layout.tsx regardless.
+    try {
+      await fetch('/api/admin/logout', { method: 'POST' })
+    } catch {
+      // Non-fatal — proceed with sign-out regardless.
+    }
     await supabase.auth.signOut()
     router.push('/admin/login')
   }

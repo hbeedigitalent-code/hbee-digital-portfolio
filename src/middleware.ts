@@ -12,12 +12,32 @@
 //   - client → a row in `clients`     (user_id = auth uid)
 // No hardcoded emails, no service-role key here — only the already-public anon
 // key plus the visitor's own session cookie.
+//
+// Admin routes carry a third layer: a signed, httpOnly "2FA verified" cookie
+// (src/lib/admin-2fa-cookie.ts) is required for every /admin/* route except
+// /admin/login and /admin-2fa-challenge. Verifying that cookie here is pure
+// HMAC signature/expiry checking — still no service-role key. Whether 2FA is
+// required at all for a given admin, and issuing the cookie, happens only in
+// /api/admin/2fa/status and /api/admin/2fa/login, which do hold the
+// service-role key and are the only code that ever reads admin_2fa.
+//
+// /admin-2fa-challenge is deliberately a TOP-LEVEL route (not nested under
+// /admin/) so it does not inherit the admin dashboard shell (sidebar/header/
+// nav) from src/app/admin/layout.tsx — the challenge must render before that
+// shell is ever shown. Because it lives outside the /admin/:path* matcher
+// below, it is listed explicitly so this middleware still runs for it and
+// still enforces Layers 1-2 (session + active admin) on it; only Layer 3 is
+// skipped there.
 
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { ADMIN_2FA_COOKIE_NAME, verifyAdmin2FACookie } from '@/lib/admin-2fa-cookie'
 
 const ADMIN_PREFIX = '/admin'
 const PORTAL_PREFIX = '/client-portal'
+// The 2FA challenge itself must stay reachable once Layers 1-2 pass — it is
+// where an admin actually completes the check this middleware enforces.
+const ADMIN_2FA_CHALLENGE_PATH = '/admin-2fa-challenge'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -83,6 +103,26 @@ export async function middleware(request: NextRequest) {
       // errors (e.g. an RLS/permissions gap) we fall through to the existing
       // client-side admin gate rather than risk locking out a real admin.
       if (!error && !data) return redirect('/client-portal')
+
+      // Layer 3 — server-enforced 2FA. The challenge route itself is exempt
+      // (it is where this check is satisfied); every other /admin/* route
+      // requires a valid, signed, user-bound "2FA verified" cookie. This is
+      // pure signature/expiry verification (see admin-2fa-cookie.ts) — no
+      // service-role key and no admin_2fa read happens here. Whether 2FA is
+      // even required for this admin is decided by /api/admin/2fa/status,
+      // which is what the challenge route calls.
+      if (pathname !== ADMIN_2FA_CHALLENGE_PATH) {
+        const cookieValue = request.cookies.get(ADMIN_2FA_COOKIE_NAME)?.value
+        const verified = await verifyAdmin2FACookie(cookieValue, user.id)
+
+        if (!verified) {
+          const url = request.nextUrl.clone()
+          url.pathname = ADMIN_2FA_CHALLENGE_PATH
+          url.search = ''
+          url.searchParams.set('next', pathname)
+          return NextResponse.redirect(url)
+        }
+      }
     } else if (isPortalArea) {
       const { data, error } = await supabase
         .from('clients')
@@ -101,5 +141,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/client-portal/:path*'],
+  matcher: ['/admin/:path*', '/admin-2fa-challenge', '/client-portal/:path*'],
 }

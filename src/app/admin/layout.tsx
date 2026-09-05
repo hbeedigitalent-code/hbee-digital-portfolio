@@ -7,9 +7,6 @@ import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import SvgIcon from '@/components/ui/SvgIcon'
 
-// Hardcoded admin emails as fallback
-const ADMIN_EMAILS = ['hello.hbeedigitals@gmail.com']
-
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -135,13 +132,9 @@ const navItems = [
   }, [pathname, router, siteSettings])
 
   async function checkIsAdmin(user: any): Promise<boolean> {
-    // 1. Check hardcoded admin emails first
-    if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) {
-      console.log('✅ Admin found via hardcoded email:', user.email)
-      return true
-    }
-    
-    // 2. Try database check (with better error handling)
+    // Database check only — the hardcoded-email fallback has been removed.
+    // Admin status is resolved exclusively through admin_users, matching
+    // middleware.ts (the authoritative access boundary).
     try {
       const { data, error } = await supabase
         .from('admin_users')
@@ -152,7 +145,6 @@ const navItems = [
       
       if (error) {
         console.error('⚠️ Admin check error:', error)
-        // Don't fail - fallback to hardcoded emails
         return false
       }
       
@@ -168,6 +160,14 @@ const navItems = [
   }
 
   async function handleLogout() {
+    // Clear the httpOnly 2FA-verified cookie server-side first — client JS
+    // cannot delete an httpOnly cookie itself — then end the Supabase session.
+    try {
+      await fetch('/api/admin/logout', { method: 'POST' })
+    } catch {
+      // Non-fatal: proceed with sign-out regardless, so a network blip never
+      // traps the admin in a logged-in-but-can't-log-out state.
+    }
     await supabase.auth.signOut()
     localStorage.removeItem('admin_avatar')
     localStorage.removeItem('admin_name')

@@ -47,19 +47,29 @@ export default function AdminProfile() {
           localStorage.setItem('admin_name', authUser.user_metadata.full_name)
         }
         
-        // Check if 2FA is enabled
-        const { data: twoFAData } = await supabase
-          .from('admin_2fa')
-          .select('is_enabled')
-          .eq('user_id', authUser.id)
-          .single()
-        
-        setTwoFAEnabled(twoFAData?.is_enabled || false)
+        // Check if 2FA is enabled — via the server route, which uses the
+        // service-role key. The browser never queries admin_2fa directly
+        // (it is correctly locked down by RLS and would otherwise silently
+        // fail here, which is exactly the bug this replaces).
+        await refreshTwoFAStatus()
       }
       setLoading(false)
     }
     getUser()
   }, [router])
+
+  const refreshTwoFAStatus = async () => {
+    try {
+      const response = await fetch('/api/admin/2fa/status', { method: 'GET' })
+      const result = await response.json()
+      if (response.ok) {
+        setTwoFAEnabled(Boolean(result.enabled))
+      }
+    } catch {
+      // Leave the last known state on a transient network failure rather
+      // than flashing an incorrect "disabled" status.
+    }
+  }
 
   const refreshUser = async () => {
     const { data: { user: refreshed } } = await supabase.auth.getUser()
@@ -197,10 +207,11 @@ export default function AdminProfile() {
   const setup2FA = async () => {
     setMessage(null)
     try {
+      // No userId/email in the body — the server derives the acting admin
+      // from the current session, never from browser-supplied values.
       const response = await fetch('/api/admin/2fa/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.id, email: user?.email })
       })
       const data = await response.json()
       if (data.success) {
@@ -225,10 +236,12 @@ export default function AdminProfile() {
     setMessage(null)
 
     try {
+      // Only the code is sent — the server derives the acting admin from the
+      // current session, never from a browser-supplied userId.
       const response = await fetch('/api/admin/2fa/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.id, token: twoFAToken })
+        body: JSON.stringify({ token: twoFAToken }),
       })
       const data = await response.json()
       if (data.success) {
@@ -252,17 +265,18 @@ export default function AdminProfile() {
 
     setSaving(true)
     try {
-      const { error } = await supabase
-        .from('admin_2fa')
-        .update({ is_enabled: false, secret: null, backup_codes: null })
-        .eq('user_id', user.id)
+      // Routed through a protected server endpoint — admin_2fa is correctly
+      // locked down by RLS, so a direct browser write here would silently
+      // fail (that silent failure was the original bug this replaces).
+      const response = await fetch('/api/admin/2fa/disable', { method: 'POST' })
+      const result = await response.json()
 
-      if (error) throw error
+      if (!result.success) throw new Error(result.error || 'Failed to disable 2FA')
 
       setTwoFAEnabled(false)
       setMessage({ type: 'success', text: '2FA disabled successfully' })
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to disable 2FA' })
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Failed to disable 2FA' })
     } finally {
       setSaving(false)
     }

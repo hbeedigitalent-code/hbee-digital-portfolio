@@ -1,154 +1,152 @@
 // src/app/api/admin/2fa/login/route.ts
+//
+// Verifies the TOTP code submitted on the /admin/2fa-challenge form and, on
+// success, issues the signed "2FA verified" cookie middleware checks on every
+// subsequent /admin/* request.
+//
+// The acting user is derived from the caller's own Supabase session cookies —
+// never from a body field. A request with no valid session is rejected before
+// any admin_2fa row is ever read.
 import { NextResponse } from 'next/server'
 import speakeasy from 'speakeasy'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { getAdmin2FACookieOptions, ADMIN_2FA_COOKIE_NAME, signAdmin2FACookie } from '@/lib/admin-2fa-cookie'
 
-// Lazy initialize Supabase clients - only when needed
-let supabaseAdmin: any = null
-let supabaseAnon: any = null
+// Lazy, non-throwing service-role client. Deliberately not the shared
+// src/lib/supabaseAdmin.ts singleton, which throws at import time when
+// SUPABASE_SERVICE_ROLE_KEY is missing — that would crash this whole route
+// instead of returning a clean "Server configuration error" response.
+let supabaseAdminClient: any = null
 
-function getSupabaseClients() {
-  if (supabaseAdmin && supabaseAnon) {
-    return { supabaseAdmin, supabaseAnon }
-  }
+function getServiceRoleClient() {
+  if (supabaseAdminClient) return supabaseAdminClient
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  if (!supabaseUrl) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL is not set')
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return null
   }
 
-  // Dynamic import to avoid build-time issues
   const { createClient } = require('@supabase/supabase-js')
+  supabaseAdminClient = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
 
-  if (supabaseServiceKey) {
-    supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
-  }
-
-  if (supabaseAnonKey) {
-    supabaseAnon = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
-  }
-
-  return { supabaseAdmin, supabaseAnon }
+  return supabaseAdminClient
 }
 
 export async function POST(request: Request) {
   try {
-    const { userId, token } = await request.json()
+    const { token } = await request.json()
 
-    if (!userId || !token) {
+    if (!token || typeof token !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'Missing userId or token' },
-        { status: 400 }
+        { success: false, error: 'Missing verification code' },
+        { status: 400 },
       )
     }
 
-    console.log('🔍 2FA Login attempt for userId:', userId)
+    // 1. Who is actually calling — from the session, not the request body.
+    const sessionClient = createServerSupabaseClient()
+    const {
+      data: { user },
+    } = await sessionClient.auth.getUser()
 
-    const { supabaseAdmin: adminClient } = getSupabaseClients()
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Not authenticated' },
+        { status: 401 },
+      )
+    }
 
+    const adminClient = getServiceRoleClient()
     if (!adminClient) {
       console.error('❌ Supabase service-role client not available')
       return NextResponse.json(
         { success: false, error: 'Server configuration error' },
-        { status: 500 }
+        { status: 500 },
       )
     }
 
-    // 1. Get user's 2FA secret — read with the SERVICE-ROLE client only.
-    //    The TOTP secret / backup codes must never be reachable via the
-    //    public anon client (admin_2fa is locked down by RLS).
-    const { data: twoFAData, error: twoFAError } = await adminClient
-      .from('admin_2fa')
-      .select('secret, is_enabled')
-      .eq('user_id', userId)
-      .single()
-
-    if (twoFAError || !twoFAData) {
-      console.error('❌ 2FA data error:', twoFAError)
-      return NextResponse.json(
-        { success: false, error: '2FA not setup' },
-        { status: 400 }
-      )
-    }
-
-    if (!twoFAData.is_enabled) {
-      console.error('❌ 2FA not enabled')
-      return NextResponse.json(
-        { success: false, error: '2FA not enabled' },
-        { status: 400 }
-      )
-    }
-
-    // 2. Verify token
-    const verified = speakeasy.totp.verify({
-      secret: twoFAData.secret,
-      encoding: 'base32',
-      token: token,
-      window: 1
-    })
-
-    if (!verified) {
-      console.error('❌ Invalid 2FA code')
-      return NextResponse.json(
-        { success: false, error: 'Invalid verification code' },
-        { status: 400 }
-      )
-    }
-
-    console.log('✅ 2FA verified for userId:', userId)
-
-    // 3. CHECK IF USER IS ADMIN - USING SERVICE ROLE (BYPASSES RLS)
-    if (!adminClient) {
-      console.error('❌ Supabase admin client not available')
-      return NextResponse.json(
-        { success: false, error: 'Server configuration error' },
-        { status: 500 }
-      )
-    }
-
+    // 2. Confirm the caller is an active admin — service role bypasses RLS.
     const { data: adminData, error: adminError } = await adminClient
       .from('admin_users')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .eq('is_active', true)
-      .single()
+      .maybeSingle()
 
     if (adminError) {
       console.error('❌ Admin check error:', adminError)
     }
 
     if (!adminData) {
-      console.error('❌ User is NOT admin - userId:', userId)
       return NextResponse.json(
         { success: false, error: 'User is not authorized as admin' },
-        { status: 403 }
+        { status: 403 },
       )
     }
 
-    console.log('✅ Admin verified:', adminData.email)
+    // 3. Get the 2FA secret for THIS session's user — service-role only.
+    //    The secret / backup codes never leave this route.
+    const { data: twoFAData, error: twoFAError } = await adminClient
+      .from('admin_2fa')
+      .select('secret, is_enabled')
+      .eq('user_id', user.id)
+      .maybeSingle()
 
-    // ✅ USER IS ADMIN - ALLOW ACCESS
-    return NextResponse.json({
-      success: true,
-      admin: adminData
+    if (twoFAError || !twoFAData) {
+      return NextResponse.json(
+        { success: false, error: '2FA not set up' },
+        { status: 400 },
+      )
+    }
+
+    if (!twoFAData.is_enabled) {
+      return NextResponse.json(
+        { success: false, error: '2FA is not enabled for this account' },
+        { status: 400 },
+      )
+    }
+
+    // 4. Verify the TOTP code.
+    const verified = speakeasy.totp.verify({
+      secret: twoFAData.secret,
+      encoding: 'base32',
+      token,
+      window: 1,
     })
+
+    if (!verified) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid verification code' },
+        { status: 400 },
+      )
+    }
+
+    // 5. Mint the verification cookie. Fail closed if the secret is missing —
+    //    never respond success without actually being able to issue a cookie.
+    const cookieValue = await signAdmin2FACookie(user.id)
+    if (!cookieValue) {
+      console.error('❌ ADMIN_2FA_COOKIE_SECRET is not set — cannot complete 2FA verification')
+      return NextResponse.json(
+        { success: false, error: 'Server configuration error' },
+        { status: 500 },
+      )
+    }
+
+    const response = NextResponse.json({ success: true })
+    response.cookies.set(ADMIN_2FA_COOKIE_NAME, cookieValue, getAdmin2FACookieOptions())
+    return response
   } catch (error: any) {
-    console.error('Login verify error:', error)
+    console.error('2FA login verify error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Verification failed' },
-      { status: 500 }
+      { success: false, error: 'Verification failed' },
+      { status: 500 },
     )
   }
 }
