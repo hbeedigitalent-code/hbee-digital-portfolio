@@ -38,11 +38,27 @@ export default function ClientDeliverablesPage() {
         .maybeSingle()
 
       if (clientData) {
-        const { data: deliverableData } = await supabase
-          .from('project_deliverables')
-          .select('*')
-          .order('uploaded_at', { ascending: false })
-        setDeliverables(deliverableData || [])
+        // project_deliverables has no client_id column — it is owned via
+        // project_deliverables.project_id -> projects.id -> projects.client_id.
+        // Resolve this client's own project ids first so a failed or empty
+        // project lookup can never fall through to an unscoped read.
+        const { data: myProjects, error: projectsError } = await supabase
+          .from('projects')
+          .select('id')
+          .eq('client_id', clientData.id)
+
+        const projectIds = projectsError ? [] : (myProjects || []).map((p) => p.id)
+
+        if (projectIds.length > 0) {
+          const { data: deliverableData } = await supabase
+            .from('project_deliverables')
+            .select('*')
+            .in('project_id', projectIds)
+            .order('uploaded_at', { ascending: false })
+          setDeliverables(deliverableData || [])
+        } else {
+          setDeliverables([])
+        }
       }
     }
 

@@ -39,12 +39,29 @@ export default function ClientMessagesPage() {
 
       if (clientData) {
         setClientId(clientData.id)
-        const { data: messageData } = await supabase
-          .from('project_messages')
-          .select('*')
+
+        // project_messages has no client_id column — it is owned via
+        // project_messages.project_id -> projects.id -> projects.client_id.
+        // Resolve this client's own project ids first so a failed or empty
+        // project lookup can never fall through to an unscoped (or, as
+        // before, wrongly-filtered) read of the message table.
+        const { data: myProjects, error: projectsError } = await supabase
+          .from('projects')
+          .select('id')
           .eq('client_id', clientData.id)
-          .order('created_at', { ascending: false })
-        setMessages(messageData || [])
+
+        const projectIds = projectsError ? [] : (myProjects || []).map((p) => p.id)
+
+        if (projectIds.length > 0) {
+          const { data: messageData } = await supabase
+            .from('project_messages')
+            .select('*')
+            .in('project_id', projectIds)
+            .order('created_at', { ascending: false })
+          setMessages(messageData || [])
+        } else {
+          setMessages([])
+        }
       }
     }
 

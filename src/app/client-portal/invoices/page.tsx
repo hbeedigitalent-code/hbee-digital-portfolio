@@ -39,11 +39,27 @@ export default function ClientInvoicesPage() {
         .maybeSingle()
 
       if (clientData) {
-        const { data: invoiceData } = await supabase
-          .from('project_invoices')
-          .select('*')
-          .order('created_at', { ascending: false })
-        setInvoices(invoiceData || [])
+        // project_invoices has no client_id column — it is owned via
+        // project_invoices.project_id -> projects.id -> projects.client_id.
+        // Resolve this client's own project ids first so a failed or empty
+        // project lookup can never fall through to an unscoped read.
+        const { data: myProjects, error: projectsError } = await supabase
+          .from('projects')
+          .select('id')
+          .eq('client_id', clientData.id)
+
+        const projectIds = projectsError ? [] : (myProjects || []).map((p) => p.id)
+
+        if (projectIds.length > 0) {
+          const { data: invoiceData } = await supabase
+            .from('project_invoices')
+            .select('*')
+            .in('project_id', projectIds)
+            .order('created_at', { ascending: false })
+          setInvoices(invoiceData || [])
+        } else {
+          setInvoices([])
+        }
       }
     }
 

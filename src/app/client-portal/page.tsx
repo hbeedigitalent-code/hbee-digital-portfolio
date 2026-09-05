@@ -80,17 +80,33 @@ export default function ClientPortalDashboard() {
           .order('uploaded_at', { ascending: false })
         setFiles(fileData || [])
 
-        const { data: deliverableData } = await supabase
-          .from('project_deliverables')
-          .select('*')
-          .order('created_at', { ascending: false })
-        setDeliverables(deliverableData || [])
+        // project_deliverables and project_invoices have no client_id column
+        // — they are owned via project_id -> projects.id -> projects.client_id.
+        // Reuse the project ids already fetched above (no extra round trip)
+        // instead of re-querying; if that fetch returned nothing (including
+        // on error, where projectData is left undefined), projectIds is
+        // empty and both widgets render empty rather than ever running an
+        // unscoped query that could show another client's rows.
+        const projectIds = (projectData || []).map((p) => p.id)
 
-        const { data: invoiceData } = await supabase
-          .from('project_invoices')
-          .select('*')
-          .order('created_at', { ascending: false })
-        setInvoices(invoiceData || [])
+        if (projectIds.length > 0) {
+          const { data: deliverableData } = await supabase
+            .from('project_deliverables')
+            .select('*')
+            .in('project_id', projectIds)
+            .order('created_at', { ascending: false })
+          setDeliverables(deliverableData || [])
+
+          const { data: invoiceData } = await supabase
+            .from('project_invoices')
+            .select('*')
+            .in('project_id', projectIds)
+            .order('created_at', { ascending: false })
+          setInvoices(invoiceData || [])
+        } else {
+          setDeliverables([])
+          setInvoices([])
+        }
       }
     }
 
