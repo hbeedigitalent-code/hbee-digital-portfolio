@@ -89,7 +89,7 @@ export default function ClientDeliverablesPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {deliverables.map((d) => (
-            <div key={d.id} className="rounded-xl border border-[var(--border)] bg-white p-6">
+            <div key={d.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-6">
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="font-semibold text-[var(--text-primary)]">{d.title}</h3>

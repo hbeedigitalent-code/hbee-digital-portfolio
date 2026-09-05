@@ -110,7 +110,7 @@ export default function ClientProjectDetailPage() {
       </Link>
 
       {/* Project Header */}
-      <div className="rounded-xl border border-[var(--border)] bg-white p-6">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-[var(--text-primary)]">{project.project_name}</h1>
@@ -151,7 +151,7 @@ export default function ClientProjectDetailPage() {
       </div>
 
       {/* Milestones */}
-      <div className="rounded-xl border border-[var(--border)] bg-white p-6">
+      <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-6">
         <h2 className="text-lg font-semibold text-[var(--text-primary)]">Milestones</h2>
         {milestones.length === 0 ? (
           <p className="mt-4 text-sm text-[var(--text-muted)]">No milestones yet</p>

@@ -293,7 +293,8 @@ export default function ClientFilesPage() {
           onAction={() => fileInputRef.current?.click()}
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-white">
+        <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-card)]">
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="border-b border-[var(--border)] bg-[var(--bg-section)]">
               <tr className="text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
@@ -344,6 +345,7 @@ export default function ClientFilesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

@@ -92,7 +92,7 @@ export default function ClientMessagesPage() {
       ) : (
         <div className="space-y-4">
           {messages.map((msg) => (
-            <div key={msg.id} className="rounded-xl border border-[var(--border)] bg-white p-4">
+            <div key={msg.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
