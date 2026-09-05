@@ -58,6 +58,9 @@ export function ProjectRequestForm({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  // Non-blocking notice shown on the success screen when the project was
+  // created but could not be linked back to its originating request row.
+  const [linkWarning, setLinkWarning] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     project_title: '',
@@ -96,42 +99,41 @@ export function ProjectRequestForm({
     }
 
     try {
-      console.log('📝 Submitting project request...')
-      console.log('Client ID:', clientId)
-      console.log('User ID:', userId)
-
-      // 1. Insert project request
-      const { data: requestData, error: requestError } = await supabase
+      // 1. Insert the project request. Only the columns that actually exist
+      // on project_requests are written (id, client_id, project_id, title,
+      // description, status, created_at). The extra fields this form
+      // collects — business name, service, timeline, priority, budget — are
+      // NOT persisted here in this batch; service and description are still
+      // captured on the projects row below.
+      const { data: requestRow, error: requestError } = await supabase
         .from('project_requests')
         .insert({
           client_id: clientId,
-          user_id: userId,
-          project_title: formData.project_title,
-          business_name: formData.business_name || businessName,
-          service_needed: formData.service_needed,
+          title: formData.project_title,
           description: formData.description,
-          preferred_timeline: formData.preferred_timeline,
-          priority: formData.priority,
-          budget_range: formData.budget_range || null,
-          status: 'Pending Review',
+          status: 'open',
         })
-        .select()
+        .select('id')
+        .single()
 
-      if (requestError) {
+      if (requestError || !requestRow) {
         console.error('❌ Request error:', requestError)
-        throw new Error(requestError.message || 'Failed to create request')
+        throw new Error(requestError?.message || 'Failed to create request')
       }
 
-      console.log('✅ Project request created:', requestData)
-
-      // 2. Create a project record with Pending Review status
+      // 2. Create the project record. Every column here exists on projects.
       const projectId = `PROJ-${Date.now().toString().slice(-6)}`
-      
-      const { data: projectData, error: projectError } = await supabase
+
+      const { data: projectRow, error: projectError } = await supabase
         .from('projects')
         .insert({
           client_id: clientId,
           project_id: projectId,
+          // `projects` is a shared table whose portfolio side uses `title`,
+          // which is NOT NULL. The client-portal side reads `project_name`.
+          // Write both (same value) so the required column is satisfied and
+          // the admin/portal project lists render correctly.
+          title: formData.project_title,
           project_name: formData.project_title,
           status: 'Pending Review',
           progress: 0,
@@ -139,18 +141,43 @@ export function ProjectRequestForm({
           service_selected: formData.service_needed,
           start_date: new Date().toISOString(),
         })
-        .select()
+        .select('id')
+        .single()
 
-      if (projectError) {
-        console.error('⚠️ Project creation error:', projectError)
-        // Don't fail - the request was saved
-      } else {
-        console.log('✅ Project created:', projectData)
+      if (projectError || !projectRow) {
+        console.error('❌ Project creation error:', projectError)
+        // The request row was saved, but the project — the thing the client
+        // actually needs — was not. Surface this as an error and do NOT show
+        // the success screen or redirect: reporting a clean success here
+        // would be false.
+        setError(
+          'Your request was saved, but we could not create the project record. Please contact support so we can finish setting it up.',
+        )
+        setLoading(false)
+        return
+      }
+
+      // 3. Link the request back to its project. project_requests.project_id
+      // is a real column; this is a best-effort association.
+      const { error: linkError } = await supabase
+        .from('project_requests')
+        .update({ project_id: projectRow.id })
+        .eq('id', requestRow.id)
+
+      if (linkError) {
+        // The project exists and is fully usable (visible in the portal and
+        // to the admin) — only the back-reference on the request row is
+        // missing. Keep the project, but tell the client the truth rather
+        // than claim the whole workflow completed cleanly.
+        console.error('⚠️ Request→project link error:', linkError)
+        setLinkWarning(
+          'Your project was created, but we could not link it to your original request. This does not affect the project itself.',
+        )
       }
 
       setSuccess(true)
       if (onSuccess) onSuccess()
-      
+
       // Redirect after 2 seconds
       setTimeout(() => {
         router.push('/client-portal/projects')
@@ -177,6 +204,11 @@ export function ProjectRequestForm({
         <p className="mt-4 text-sm text-[var(--text-muted)]">
           Status: <span className="font-medium text-yellow-600 dark:text-yellow-400">Pending Review</span>
         </p>
+        {linkWarning && (
+          <p className="mx-auto mt-4 max-w-sm rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-sm text-yellow-600 dark:text-yellow-400">
+            {linkWarning}
+          </p>
+        )}
       </div>
     )
   }

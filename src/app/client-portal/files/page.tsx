@@ -6,13 +6,21 @@ import { createClientComponentClient } from '@/lib/supabase-client'
 import SvgIcon from '@/components/ui/SvgIcon'
 import EmptyState from '@/components/client-portal/EmptyState'
 
-interface File {
+interface ClientFile {
   id: string
   file_name: string
   file_url: string
   file_type: string
   file_size: number
   uploaded_at: string
+  project_id: string | null
+}
+
+interface ClientProject {
+  id: string
+  project_name: string | null
+  project_id: string | null
+  status: string | null
 }
 
 // Reasonable business-file allow-list — images, common documents, and
@@ -33,9 +41,18 @@ const ALLOWED_FILE_TYPES = [
 ]
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024 // 25 MB
 
+// A project is "active" (and therefore the sensible auto-selection when the
+// client has exactly one) unless it is finished or archived.
+const INACTIVE_PROJECT_STATUSES = ['Completed', 'Archived']
+
+// Sentinel <select> value meaning "not tied to a specific project".
+const GENERAL_VALUE = ''
+
 export default function ClientFilesPage() {
   const supabase = createClientComponentClient()
-  const [files, setFiles] = useState<File[]>([])
+  const [files, setFiles] = useState<ClientFile[]>([])
+  const [projects, setProjects] = useState<ClientProject[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(GENERAL_VALUE)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [clientId, setClientId] = useState<string | null>(null)
@@ -44,10 +61,10 @@ export default function ClientFilesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetchFiles()
+    fetchData()
   }, [])
 
-  async function fetchFiles() {
+  async function fetchData() {
     setLoading(true)
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -60,16 +77,40 @@ export default function ClientFilesPage() {
 
       if (clientData) {
         setClientId(clientData.id)
-        const { data: fileData } = await supabase
-          .from('project_files')
-          .select('*')
-          .eq('client_id', clientData.id)
-          .order('uploaded_at', { ascending: false })
+
+        const [{ data: fileData }, { data: projectData }] = await Promise.all([
+          supabase
+            .from('project_files')
+            .select('*')
+            .eq('client_id', clientData.id)
+            .order('uploaded_at', { ascending: false }),
+          supabase
+            .from('projects')
+            .select('id, project_name, project_id, status')
+            .eq('client_id', clientData.id)
+            .order('created_at', { ascending: false }),
+        ])
+
         setFiles(fileData || [])
+
+        const clientProjects = (projectData || []) as ClientProject[]
+        setProjects(clientProjects)
+
+        // Default to General, unless there is exactly one active project.
+        const activeProjects = clientProjects.filter(
+          (p) => !INACTIVE_PROJECT_STATUSES.includes(p.status || ''),
+        )
+        setSelectedProjectId(activeProjects.length === 1 ? activeProjects[0].id : GENERAL_VALUE)
       }
     }
 
     setLoading(false)
+  }
+
+  function projectLabel(projectId: string | null): string {
+    if (!projectId) return 'General'
+    const match = projects.find((p) => p.id === projectId)
+    return match?.project_name || match?.project_id || 'Project'
   }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -90,6 +131,28 @@ export default function ClientFilesPage() {
       return
     }
 
+    // Never trust the selected project id from the form. When a specific
+    // project is chosen, re-confirm it belongs to THIS client (the query is
+    // scoped to the client's own id, itself derived from the authenticated
+    // user) before anything is uploaded or inserted. A General upload
+    // (project_id = null) needs no such check.
+    let projectIdToWrite: string | null = null
+    if (selectedProjectId !== GENERAL_VALUE) {
+      const { data: ownedProject } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('id', selectedProjectId)
+        .eq('client_id', clientId)
+        .maybeSingle()
+
+      if (!ownedProject) {
+        setPageError('That project could not be verified for your account. Please refresh and try again.')
+        if (fileInputRef.current) fileInputRef.current.value = ''
+        return
+      }
+      projectIdToWrite = ownedProject.id
+    }
+
     setUploading(true)
 
     try {
@@ -103,13 +166,12 @@ export default function ClientFilesPage() {
       if (uploadError) throw uploadError
 
       // Store the bare object path, not a permanent public URL — downloads
-      // now go exclusively through the signed-url API route (handleDownload
-      // below). toProjectFilesObjectPath() on the read side already accepts
-      // both this shape and any pre-existing full public URLs, so no
-      // migration of old rows is required. While the bucket stays public
-      // (item C.10), the upload call itself is otherwise unchanged.
+      // go exclusively through the signed-url API routes. project_id is
+      // written only for a verified, client-owned project; a General upload
+      // stays NULL and is surfaced to the admin under a "General" label.
       const { error: dbError } = await supabase.from('project_files').insert({
         client_id: clientId,
+        project_id: projectIdToWrite,
         file_name: file.name,
         file_url: filePath,
         file_type: file.type || 'application/octet-stream',
@@ -119,7 +181,7 @@ export default function ClientFilesPage() {
 
       if (dbError) throw dbError
 
-      await fetchFiles()
+      await fetchData()
     } catch (error) {
       console.error('Upload error:', error)
       alert('Failed to upload file. Please try again.')
@@ -129,7 +191,7 @@ export default function ClientFilesPage() {
     }
   }
 
-  async function handleDownload(file: File) {
+  async function handleDownload(file: ClientFile) {
     setPageError(null)
     setDownloadingId(file.id)
 
@@ -183,7 +245,22 @@ export default function ClientFilesPage() {
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Files</h1>
           <p className="text-[var(--text-muted)]">Upload and manage your project files</p>
         </div>
-        <div>
+        <div className="flex flex-wrap items-center gap-3">
+          <label htmlFor="file-project" className="sr-only">Attach to project</label>
+          <select
+            id="file-project"
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            disabled={uploading}
+            className="rounded-full border border-[var(--border)] bg-[var(--bg-card)] px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] disabled:opacity-50"
+          >
+            <option value={GENERAL_VALUE}>General / No specific project</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.project_name || project.project_id || 'Untitled project'}
+              </option>
+            ))}
+          </select>
           <input
             ref={fileInputRef}
             type="file"
@@ -221,7 +298,8 @@ export default function ClientFilesPage() {
             <thead className="border-b border-[var(--border)] bg-[var(--bg-section)]">
               <tr className="text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
                 <th className="px-4 py-3">File Name</th>
-                <th className="px-4 py-3 hidden sm:table-cell">Type</th>
+                <th className="px-4 py-3 hidden sm:table-cell">Project</th>
+                <th className="px-4 py-3 hidden md:table-cell">Type</th>
                 <th className="px-4 py-3 hidden md:table-cell">Size</th>
                 <th className="px-4 py-3 hidden lg:table-cell">Uploaded</th>
                 <th className="px-4 py-3 text-right">Actions</th>
@@ -233,10 +311,16 @@ export default function ClientFilesPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <SvgIcon name="file" size={16} color="var(--text-muted)" />
-                      <span className="text-sm font-medium text-[var(--text-primary)]">{file.file_name}</span>
+                      <div className="min-w-0">
+                        <span className="block text-sm font-medium text-[var(--text-primary)]">{file.file_name}</span>
+                        <span className="block text-xs text-[var(--text-muted)] sm:hidden">{projectLabel(file.project_id)}</span>
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
+                    <span className="text-sm text-[var(--text-muted)]">{projectLabel(file.project_id)}</span>
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell">
                     <span className="text-sm text-[var(--text-muted)]">{file.file_type?.split('/').pop() || 'Unknown'}</span>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell text-sm text-[var(--text-muted)]">
