@@ -143,9 +143,6 @@ const nextConfig = {
   experimental: {
     optimizeCss: true, // Requires critters package
     scrollRestoration: true,
-    // Keep the server-only blog HTML sanitizer (sanitize-html -> htmlparser2, an
-    // ESM-only package) out of the webpack bundle; Node require()s it at runtime.
-    serverComponentsExternalPackages: ['sanitize-html'],
   },
   
   // Increase static page generation timeout
