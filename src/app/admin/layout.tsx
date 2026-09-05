@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import SvgIcon from '@/components/ui/SvgIcon'
+import ThemeToggle from '@/components/ThemeToggle'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -271,6 +272,8 @@ const navItems = [
             </div>
             
             <div className="flex items-center gap-4">
+              <ThemeToggle />
+
               <Link href="/admin/inquiries" className="relative">
                 <SvgIcon name="bell" size={20} color="var(--text-muted)" />
                 {unreadInquiries > 0 && (

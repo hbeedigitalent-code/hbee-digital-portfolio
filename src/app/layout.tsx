@@ -1,18 +1,9 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
-import { Suspense } from 'react'
-import { GoogleAnalytics as NextGoogleAnalytics } from '@next/third-parties/google'
 
 import Providers from './providers'
-import GoogleAnalytics from '@/components/GoogleAnalytics'
-import CookieConsent from '@/components/CookieBanner'
-import StructuredData from '@/components/StructuredData'
 import { ThemeProvider } from '@/context/ThemeContext'
-import CursorGlow from '@/components/ui/CursorGlow'
-import PageUtilities from '@/components/ui/PageUtilities'
-import FloatingWhatsApp from '@/components/ui/FloatingWhatsApp'
-import SubscribePopup from '@/components/SubscribePopup'
 
 // Optimize font loading
 const inter = Inter({
@@ -94,8 +85,6 @@ export const viewport: Viewport = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const gaId = process.env.NEXT_PUBLIC_GA_ID
-
   return (
     <html lang="en" className={`${inter.variable}`} suppressHydrationWarning>
       <head>
@@ -131,40 +120,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to main content
         </a>
 
+        {/*
+          Marketing-only site chrome (Navbar/Footer, cookie banner, subscribe
+          popup, cursor glow, scroll utilities, floating WhatsApp, structured
+          data, analytics, service-worker registration) now lives in
+          src/app/(marketing)/layout.tsx so it never renders on /admin/*,
+          /client-portal/*, /admin/login, or /admin-2fa-challenge. The root
+          layout stays authentication-independent: html/body, fonts, the
+          pre-paint theme script, ThemeProvider, and web-vitals Providers.
+        */}
         <ThemeProvider>
-          <Suspense fallback={null}>
-            <CursorGlow />
-          </Suspense>
-
           <Providers>
-            <Suspense fallback={null}>
-              <GoogleAnalytics />
-            </Suspense>
-            
-            <StructuredData />
-            
             {children}
           </Providers>
-
-          <SubscribePopup />
-          <CookieConsent />
-          <PageUtilities />
-          <FloatingWhatsApp />
         </ThemeProvider>
-
-        {/* Load analytics after page load */}
-        {gaId && <NextGoogleAnalytics gaId={gaId} />}
-        
-        {/* Service Worker for caching */}
-        <script dangerouslySetInnerHTML={{
-          __html: `
-            if ('serviceWorker' in navigator && window.location.hostname !== 'localhost') {
-              window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').catch(console.error);
-              });
-            }
-          `
-        }} />
       </body>
     </html>
   )
