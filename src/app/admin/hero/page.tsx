@@ -44,7 +44,7 @@ export default function HeroEditor() {
         primary_cta_text: 'Get Started',
         primary_cta_link: '/contact',
         secondary_cta_text: 'View Work',
-        secondary_cta_link: '/projects',
+        secondary_cta_link: '/portfolio',
         background_image: '',
         is_active: true
       })

@@ -164,6 +164,11 @@ const nextConfig = {
         destination: '/',
         permanent: true,
       },
+      {
+        source: '/projects',
+        destination: '/portfolio',
+        permanent: true,
+      },
     ];
   },
   

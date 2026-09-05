@@ -15,12 +15,32 @@ interface File {
   uploaded_at: string
 }
 
+// Reasonable business-file allow-list — images, common documents, and
+// archives. Anything outside this list is rejected before upload.
+const ALLOWED_FILE_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain',
+  'text/csv',
+  'application/zip',
+]
+const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024 // 25 MB
+
 export default function ClientFilesPage() {
   const supabase = createClientComponentClient()
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [clientId, setClientId] = useState<string | null>(null)
+  const [pageError, setPageError] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -56,10 +76,23 @@ export default function ClientFilesPage() {
     const file = e.target.files?.[0]
     if (!file || !clientId) return
 
+    setPageError(null)
+
+    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      setPageError('That file type is not supported. Allowed: images, PDF, Word, Excel, text, CSV, or ZIP.')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setPageError('File is too large. Maximum size is 25MB.')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
     setUploading(true)
 
     try {
-      const fileExt = file.name.split('.').pop()
       const fileName = `${Date.now()}-${file.name}`
       const filePath = `client-files/${clientId}/${fileName}`
 
@@ -69,14 +102,16 @@ export default function ClientFilesPage() {
 
       if (uploadError) throw uploadError
 
-      const { data: urlData } = supabase.storage
-        .from('project-files')
-        .getPublicUrl(filePath)
-
+      // Store the bare object path, not a permanent public URL — downloads
+      // now go exclusively through the signed-url API route (handleDownload
+      // below). toProjectFilesObjectPath() on the read side already accepts
+      // both this shape and any pre-existing full public URLs, so no
+      // migration of old rows is required. While the bucket stays public
+      // (item C.10), the upload call itself is otherwise unchanged.
       const { error: dbError } = await supabase.from('project_files').insert({
         client_id: clientId,
         file_name: file.name,
-        file_url: urlData.publicUrl,
+        file_url: filePath,
         file_type: file.type || 'application/octet-stream',
         file_size: file.size,
         uploaded_by: 'client',
@@ -91,6 +126,39 @@ export default function ClientFilesPage() {
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleDownload(file: File) {
+    setPageError(null)
+    setDownloadingId(file.id)
+
+    // Open the tab synchronously, inside the click handler, before any
+    // await — a tab opened only after an awaited fetch resolves is treated
+    // as an unrequested popup by most browsers and gets blocked.
+    const newTab = window.open('', '_blank')
+
+    try {
+      const response = await fetch(`/api/client-portal/files/${file.id}/signed-url`)
+      const result = await response.json()
+
+      if (!response.ok || !result.url) {
+        throw new Error(result.error || 'Failed to generate download link')
+      }
+
+      if (newTab) {
+        newTab.location.href = result.url
+      } else {
+        // Popup was blocked despite the synchronous open (rare, e.g. some
+        // mobile browsers) — fall back to a same-tab navigation.
+        window.location.href = result.url
+      }
+    } catch (error) {
+      console.error('Download error:', error)
+      if (newTab) newTab.close()
+      setPageError('Failed to prepare download. Please try again.')
+    } finally {
+      setDownloadingId(null)
     }
   }
 
@@ -133,6 +201,12 @@ export default function ClientFilesPage() {
         </div>
       </div>
 
+      {pageError && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm font-semibold text-red-500">
+          {pageError}
+        </div>
+      )}
+
       {files.length === 0 ? (
         <EmptyState
           title="No files uploaded"
@@ -172,15 +246,15 @@ export default function ClientFilesPage() {
                     {new Date(file.uploaded_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <a
-                      href={file.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-[var(--accent-orange)] hover:underline"
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(file)}
+                      disabled={downloadingId === file.id}
+                      className="inline-flex items-center gap-1 text-sm text-[var(--accent-orange)] hover:underline disabled:cursor-wait disabled:opacity-60"
                     >
-                      Download
+                      {downloadingId === file.id ? 'Preparing...' : 'Download'}
                       <SvgIcon name="download" size={14} color="var(--accent-orange)" />
-                    </a>
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -135,7 +135,15 @@ export function getAdmin2FACookieOptions() {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax' as const,
-    path: '/admin',
+    // Path is '/' (not '/admin') so this cookie is also sent to
+    // /api/admin/* routes — those live under a sibling path, not a child of
+    // /admin/, so a Path=/admin cookie is never attached to them by the
+    // browser (RFC 6265 path-match). middleware.ts still restricts WHERE
+    // this cookie is enforced (only /admin/:path* and /admin-2fa-challenge)
+    // and every /api/admin/* route independently re-verifies the signature,
+    // UID binding, and expiry before trusting it — widening Path does not
+    // widen who can produce a valid signature.
+    path: '/',
     maxAge: ADMIN_2FA_COOKIE_MAX_AGE_SECONDS,
   }
 }
@@ -146,7 +154,7 @@ export function getAdmin2FAClearCookieOptions() {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax' as const,
-    path: '/admin',
+    path: '/',
     maxAge: 0,
   }
 }

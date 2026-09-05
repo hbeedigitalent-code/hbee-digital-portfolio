@@ -41,16 +41,20 @@ export default function AdminProjectsPage() {
   async function fetchProjects() {
     setLoading(true)
 
+    // Client-project management only. `projects` is a shared table that also
+    // holds public portfolio/showcase rows (status published/draft, no
+    // client_id); those must not appear here or inflate the metrics below.
     const { data, error } = await supabase
       .from('projects')
       .select(`
         *,
         clients (business_name, full_name)
       `)
+      .not('client_id', 'is', null)
       .order('created_at', { ascending: false })
 
     if (!error && data) {
-      setProjects(data)
+      setProjects(data as Project[])
       const total = data.length
       const active = data.filter((p: any) => p.status !== 'Completed' && p.status !== 'Archived').length
       const completed = data.filter((p: any) => p.status === 'Completed').length
@@ -61,10 +65,12 @@ export default function AdminProjectsPage() {
   }
 
   const filteredProjects = projects.filter(project => {
-    const matchesSearch = 
-      project.project_name?.toLowerCase().includes(search.toLowerCase()) ||
-      project.project_id?.toLowerCase().includes(search.toLowerCase()) ||
-      project.clients?.business_name?.toLowerCase().includes(search.toLowerCase())
+    const q = search.trim().toLowerCase()
+    const matchesSearch =
+      q === '' ||
+      (project.project_name?.toLowerCase().includes(q) ?? false) ||
+      (project.project_id?.toLowerCase().includes(q) ?? false) ||
+      (project.clients?.business_name?.toLowerCase().includes(q) ?? false)
     const matchesStatus = statusFilter === 'all' || project.status === statusFilter
     return matchesSearch && matchesStatus
   })
