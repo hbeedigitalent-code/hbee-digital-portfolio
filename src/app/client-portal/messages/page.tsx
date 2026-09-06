@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react'
 import { createClientComponentClient } from '@/lib/supabase-client'
 import SvgIcon from '@/components/ui/SvgIcon'
 import EmptyState from '@/components/client-portal/EmptyState'
-import StatusBadge from '@/components/client-portal/StatusBadge'
 
 interface Message {
   id: string

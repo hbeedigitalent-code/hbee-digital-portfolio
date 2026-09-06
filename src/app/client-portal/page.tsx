@@ -6,6 +6,7 @@ import { createClientComponentClient } from '@/lib/supabase-client'
 import StatsCard from '@/components/client-portal/StatsCard'
 import EmptyState from '@/components/client-portal/EmptyState'
 import SvgIcon from '@/components/ui/SvgIcon'
+import StatusPill from '@/components/ui/StatusPill'
 import Link from 'next/link'
 
 interface Client {
@@ -223,13 +224,7 @@ export default function ClientPortalDashboard() {
                     <p className="font-bold text-[var(--text-primary)]">{project.project_name}</p>
                     <p className="text-sm text-[var(--text-muted)]">{project.project_id}</p>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                    project.status === 'Completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                    project.status === 'In Progress' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                    'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                  }`}>
-                    {project.status || 'New'}
-                  </span>
+                  <StatusPill status={project.status || 'New'} />
                 </div>
                 <div className="mt-3">
                   <div className="flex justify-between text-sm">

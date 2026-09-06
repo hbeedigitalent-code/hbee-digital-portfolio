@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { createClientComponentClient } from '@/lib/supabase-client'
 import SvgIcon from '@/components/ui/SvgIcon'
 import EmptyState from '@/components/client-portal/EmptyState'
-import StatusBadge from '@/components/client-portal/StatusBadge'
+import StatusPill from '@/components/ui/StatusPill'
 
 interface Invoice {
   id: string
@@ -117,7 +117,7 @@ export default function ClientInvoicesPage() {
                     {invoice.currency || 'USD'} ${invoice.amount?.toFixed(2)}
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={invoice.status || 'pending'} />
+                    <StatusPill status={invoice.status || 'pending'} />
                   </td>
                   <td className="px-4 py-3 text-right">
                     {invoice.payment_link ? (

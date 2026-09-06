@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { createClientComponentClient } from '@/lib/supabase-client'
 import SvgIcon from '@/components/ui/SvgIcon'
 import EmptyState from '@/components/client-portal/EmptyState'
-import StatusBadge from '@/components/client-portal/StatusBadge'
+import StatusPill from '@/components/ui/StatusPill'
 
 interface Deliverable {
   id: string
@@ -102,7 +102,7 @@ export default function ClientDeliverablesPage() {
                     <span>{new Date(d.uploaded_at).toLocaleDateString()}</span>
                   </div>
                 </div>
-                <StatusBadge status={d.status || 'ready'} />
+                <StatusPill status={d.status || 'ready'} />
               </div>
 
               {d.file_url && (

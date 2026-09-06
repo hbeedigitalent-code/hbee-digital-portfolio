@@ -6,6 +6,7 @@ import { createClientComponentClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import SvgIcon from '@/components/ui/SvgIcon'
+import StatusPill from '@/components/ui/StatusPill'
 
 interface Project {
   id: string
@@ -49,26 +50,6 @@ export default function ClientProjectsPage() {
     }
 
     setLoading(false)
-  }
-
-  const getStatusColor = (status: string) => {
-    if (!status) return 'bg-gray-100 text-gray-700 dark:bg-gray-800/50 dark:text-gray-400'
-    const s = status.toLowerCase()
-    switch (s) {
-      case 'pending review':
-        return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-      case 'active':
-      case 'in progress':
-        return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-      case 'completed':
-        return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-      case 'paused':
-        return 'bg-gray-100 text-gray-700 dark:bg-gray-800/50 dark:text-gray-400'
-      case 'awaiting client':
-        return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-      default:
-        return 'bg-gray-100 text-gray-700 dark:bg-gray-800/50 dark:text-gray-400'
-    }
   }
 
   if (loading) {
@@ -145,9 +126,7 @@ export default function ClientProjectsPage() {
                   <p className="font-semibold text-[var(--text-primary)]">{project.project_name}</p>
                   <p className="text-sm text-[var(--text-muted)]">{project.project_id}</p>
                 </div>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${getStatusColor(project.status)}`}>
-                  {project.status || 'New'}
-                </span>
+                <StatusPill status={project.status || 'New'} />
               </div>
 
               {project.description && (
