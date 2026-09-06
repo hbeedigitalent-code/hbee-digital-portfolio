@@ -18,12 +18,12 @@ interface Project {
 }
 
 const statusColors: Record<string, string> = {
-  'Pending Review': 'bg-yellow-500/20 text-yellow-500',
-  'Active': 'bg-[var(--accent-lime)]/20 text-[var(--accent-lime)]',
-  'In Progress': 'bg-blue-500/20 text-blue-500',
-  'Awaiting Client': 'bg-purple-500/20 text-purple-500',
-  'Completed': 'bg-green-500/20 text-green-500',
-  'Paused': 'bg-gray-500/20 text-gray-500',
+  'Pending Review': 'bg-[var(--warning-subtle)] text-[var(--warning)]',
+  'Active': 'bg-[var(--success-subtle)] text-[var(--success)]',
+  'In Progress': 'bg-[var(--accent-subtle)] text-[var(--accent)]',
+  'Awaiting Client': 'bg-[var(--accent-subtle)] text-[var(--accent)]',
+  'Completed': 'bg-[var(--success-subtle)] text-[var(--success)]',
+  'Paused': 'bg-[var(--bg-section)] text-[var(--text-secondary)]',
 }
 
 export default function AdminProjectsPage() {
@@ -175,7 +175,7 @@ export default function AdminProjectsPage() {
                       </div>
                     </td>
                     <td className="py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[project.status] || 'bg-gray-500/20 text-gray-500'}`}>
+                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[project.status] || 'bg-[var(--bg-section)] text-[var(--text-secondary)]'}`}>
                         {project.status || 'New'}
                       </span>
                     </td>

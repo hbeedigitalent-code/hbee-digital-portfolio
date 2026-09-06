@@ -136,34 +136,34 @@ export default function AdminWorkspacePage() {
           <div className="text-xs text-[var(--text-muted)]">Active Projects</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-xl font-bold text-yellow-500">{stats?.newLeads}</div>
+          <div className="text-xl font-bold text-[var(--warning)]">{stats?.newLeads}</div>
           <div className="text-xs text-[var(--text-muted)]">New Leads</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-xl font-bold text-blue-500">{stats?.pendingAssessments}</div>
+          <div className="text-xl font-bold text-[var(--accent)]">{stats?.pendingAssessments}</div>
           <div className="text-xs text-[var(--text-muted)]">Pending Assessments</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-xl font-bold text-purple-500">{stats?.pendingOnboarding}</div>
+          <div className="text-xl font-bold text-[var(--accent)]">{stats?.pendingOnboarding}</div>
           <div className="text-xs text-[var(--text-muted)]">Pending Onboarding</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-xl font-bold text-[var(--accent-lime)]">{stats?.projectCompletionRate}%</div>
+          <div className="text-xl font-bold text-[var(--success)]">{stats?.projectCompletionRate}%</div>
           <div className="text-xs text-[var(--text-muted)]">Completion Rate</div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-lg font-bold text-cyan-500">{stats?.tasksDueThisWeek}</div>
+          <div className="text-lg font-bold text-[var(--accent)]">{stats?.tasksDueThisWeek}</div>
           <div className="text-xs text-[var(--text-muted)]">Tasks Due This Week</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-lg font-bold text-red-500">{stats?.overdueTasks}</div>
+          <div className="text-lg font-bold text-[var(--error)]">{stats?.overdueTasks}</div>
           <div className="text-xs text-[var(--text-muted)]">Overdue Tasks</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-lg font-bold text-pink-500">{stats?.pendingClientRequests}</div>
+          <div className="text-lg font-bold text-[var(--accent)]">{stats?.pendingClientRequests}</div>
           <div className="text-xs text-[var(--text-muted)]">Client Requests</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
@@ -195,10 +195,10 @@ export default function AdminWorkspacePage() {
                     </p>
                   </div>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    task.priority === 'Urgent' ? 'bg-red-500/20 text-red-500' :
-                    task.priority === 'High' ? 'bg-orange-500/20 text-orange-500' :
-                    task.priority === 'Medium' ? 'bg-yellow-500/20 text-yellow-500' :
-                    'bg-blue-500/20 text-blue-500'
+                    task.priority === 'Urgent' ? 'bg-[var(--error-subtle)] text-[var(--error)]' :
+                    task.priority === 'High' ? 'bg-[var(--warning-subtle)] text-[var(--warning)]' :
+                    task.priority === 'Medium' ? 'bg-[var(--warning-subtle)] text-[var(--warning)]' :
+                    'bg-[var(--accent-subtle)] text-[var(--accent)]'
                   }`}>
                     {task.priority}
                   </span>

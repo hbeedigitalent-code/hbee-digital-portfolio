@@ -46,14 +46,14 @@ const statusOptions = [
 ]
 
 const statusColors: Record<string, string> = {
-  'Onboarding': 'bg-yellow-500/20 text-yellow-500',
-  'Assets Required': 'bg-orange-500/20 text-orange-500',
-  'In Review': 'bg-blue-500/20 text-blue-500',
-  'In Progress': 'bg-cyan-500/20 text-cyan-500',
-  'Awaiting Client Feedback': 'bg-purple-500/20 text-purple-500',
-  'Revision Stage': 'bg-pink-500/20 text-pink-500',
-  'Completed': 'bg-[var(--accent-lime)]/20 text-[var(--accent-lime)]',
-  'Archived': 'bg-[var(--text-muted)]/20 text-[var(--text-muted)]',
+  'Onboarding': 'bg-[var(--warning-subtle)] text-[var(--warning)]',
+  'Assets Required': 'bg-[var(--warning-subtle)] text-[var(--warning)]',
+  'In Review': 'bg-[var(--accent-subtle)] text-[var(--accent)]',
+  'In Progress': 'bg-[var(--accent-subtle)] text-[var(--accent)]',
+  'Awaiting Client Feedback': 'bg-[var(--accent-subtle)] text-[var(--accent)]',
+  'Revision Stage': 'bg-[var(--warning-subtle)] text-[var(--warning)]',
+  'Completed': 'bg-[var(--success-subtle)] text-[var(--success)]',
+  'Archived': 'bg-[var(--bg-section)] text-[var(--text-secondary)]',
 }
 
 export default function AdminProjectDetailPage() {
@@ -260,7 +260,7 @@ export default function AdminProjectDetailPage() {
               <button
                 onClick={updateProject}
                 disabled={updating}
-                className="w-full rounded-full bg-[var(--accent)] px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                className="w-full rounded-full bg-[var(--accent)] px-6 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]"
               >
                 {updating ? 'Updating...' : 'Update Project'}
               </button>

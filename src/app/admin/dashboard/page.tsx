@@ -181,30 +181,30 @@ export default function AdminDashboardPage() {
           <div className="text-xs text-[var(--text-muted)]">Total Clients</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-xl font-bold text-yellow-500">{stats?.newLeads}</div>
+          <div className="text-xl font-bold text-[var(--warning)]">{stats?.newLeads}</div>
           <div className="text-xs text-[var(--text-muted)]">New Leads</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-xl font-bold text-blue-500">{stats?.pendingAssessments}</div>
+          <div className="text-xl font-bold text-[var(--accent)]">{stats?.pendingAssessments}</div>
           <div className="text-xs text-[var(--text-muted)]">Pending Assessments</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-xl font-bold text-[var(--accent-lime)]">{stats?.growthReady}</div>
+          <div className="text-xl font-bold text-[var(--success)]">{stats?.growthReady}</div>
           <div className="text-xs text-[var(--text-muted)]">Growth Ready</div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-lg font-bold text-purple-500">{stats?.pendingOnboarding}</div>
+          <div className="text-lg font-bold text-[var(--accent)]">{stats?.pendingOnboarding}</div>
           <div className="text-xs text-[var(--text-muted)]">Pending Onboarding</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-lg font-bold text-cyan-500">{stats?.tasksDueThisWeek}</div>
+          <div className="text-lg font-bold text-[var(--accent)]">{stats?.tasksDueThisWeek}</div>
           <div className="text-xs text-[var(--text-muted)]">Tasks Due</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
-          <div className="text-lg font-bold text-red-500">{stats?.overdueTasks}</div>
+          <div className="text-lg font-bold text-[var(--error)]">{stats?.overdueTasks}</div>
           <div className="text-xs text-[var(--text-muted)]">Overdue</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 text-center">
@@ -244,18 +244,18 @@ export default function AdminDashboardPage() {
               {recentActivities.map((activity, index) => (
                 <div key={index} className="flex items-start gap-3 border-b border-[var(--border)] pb-3 last:border-0 last:pb-0">
                   <div className={`mt-0.5 rounded-full p-1.5 ${
-                    activity.type === 'assessment' ? 'bg-blue-500/20' :
-                    activity.type === 'lead' ? 'bg-yellow-500/20' :
-                    'bg-[var(--accent)]/20'
+                    activity.type === 'assessment' ? 'bg-[var(--accent-subtle)]' :
+                    activity.type === 'lead' ? 'bg-[var(--warning-subtle)]' :
+                    'bg-[var(--accent-subtle)]'
                   }`}>
-                    <SvgIcon 
-                      name={activity.type === 'assessment' ? 'growth-readiness' : activity.type === 'lead' ? 'user' : 'notification'} 
-                      size={12} 
+                    <SvgIcon
+                      name={activity.type === 'assessment' ? 'growth-readiness' : activity.type === 'lead' ? 'user' : 'notification'}
+                      size={12}
                       color={
-                        activity.type === 'assessment' ? '#3B82F6' :
-                        activity.type === 'lead' ? '#FBBF24' :
+                        activity.type === 'assessment' ? 'var(--accent)' :
+                        activity.type === 'lead' ? 'var(--warning)' :
                         'var(--accent)'
-                      } 
+                      }
                     />
                   </div>
                   <div className="flex-1">

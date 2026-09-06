@@ -54,7 +54,7 @@ export default function AdminClientPortalPage() {
   const statusColors: Record<string, string> = {
     'Active': 'bg-[var(--accent-lime)]/20 text-[var(--accent-lime)]',
     'Inactive': 'bg-[var(--text-muted)]/20 text-[var(--text-muted)]',
-    'Pending': 'bg-yellow-500/20 text-yellow-500',
+    'Pending': 'bg-[var(--warning-subtle)] text-[var(--warning)]',
   }
 
   if (loading) {

@@ -328,7 +328,7 @@ export default function AdminClientDetailPage() {
                         type="button"
                         onClick={() => handleFileDownload(file)}
                         disabled={downloadingId === file.id}
-                        className="inline-flex items-center gap-1 text-[var(--accent)] hover:underline disabled:cursor-wait disabled:opacity-60"
+                        className="inline-flex items-center gap-1 text-[var(--accent)] hover:underline disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]"
                       >
                         {downloadingId === file.id ? 'Preparing...' : 'Download'}
                         <SvgIcon name="download" size={12} color="var(--accent)" />
