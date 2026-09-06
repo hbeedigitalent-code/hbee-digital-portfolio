@@ -113,8 +113,10 @@ export default function AdminProjectsPage() {
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative flex-1">
+            <label htmlFor="admin-project-search" className="sr-only">Search projects</label>
             <SvgIcon name="search" size={16} color="var(--text-muted)" className="absolute left-3 top-2.5" />
             <input
+              id="admin-project-search"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -122,7 +124,9 @@ export default function AdminProjectsPage() {
               className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-page)] pl-10 pr-4 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
             />
           </div>
+          <label htmlFor="admin-project-status-filter" className="sr-only">Filter projects by status</label>
           <select
+            id="admin-project-status-filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="rounded-lg border border-[var(--border)] bg-[var(--bg-page)] px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"

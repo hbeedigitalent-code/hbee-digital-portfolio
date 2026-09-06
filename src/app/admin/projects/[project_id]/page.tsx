@@ -233,8 +233,9 @@ export default function AdminProjectDetailPage() {
 
             <div className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Status</label>
+                <label htmlFor="project-status-select" className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Status</label>
                 <select
+                  id="project-status-select"
                   value={selectedStatus}
                   onChange={(e) => setSelectedStatus(e.target.value)}
                   className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-page)] px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
@@ -246,13 +247,15 @@ export default function AdminProjectDetailPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Progress: {progressValue}%</label>
+                <label htmlFor="project-progress-range" className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Progress: {progressValue}%</label>
                 <input
+                  id="project-progress-range"
                   type="range"
                   min="0"
                   max="100"
                   value={progressValue}
                   onChange={(e) => setProgressValue(parseInt(e.target.value))}
+                  aria-valuetext={`${progressValue}%`}
                   className="w-full accent-[var(--accent)]"
                 />
               </div>
@@ -316,7 +319,7 @@ export default function AdminProjectDetailPage() {
         </h3>
 
         {filesError && (
-          <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm font-semibold text-red-500">
+          <div role="alert" className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm font-semibold text-red-500">
             {filesError}
           </div>
         )}

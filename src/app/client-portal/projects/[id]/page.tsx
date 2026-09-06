@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClientComponentClient } from '@/lib/supabase-client'
 import SvgIcon from '@/components/ui/SvgIcon'
-import StatusBadge from '@/components/client-portal/StatusBadge'
+import StatusPill from '@/components/ui/StatusPill'
 import Link from 'next/link'
 
 interface Project {
@@ -119,7 +119,7 @@ export default function ClientProjectDetailPage() {
               <p className="mt-3 text-[var(--text-secondary)]">{project.description}</p>
             )}
           </div>
-          <StatusBadge status={project.status || 'New'} />
+          <StatusPill status={project.status || 'New'} />
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -168,7 +168,7 @@ export default function ClientProjectDetailPage() {
                     Due: {new Date(milestone.due_date).toLocaleDateString()}
                   </p>
                 </div>
-                <StatusBadge status={milestone.status || 'pending'} />
+                <StatusPill status={milestone.status || 'pending'} />
               </div>
             ))}
           </div>

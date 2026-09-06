@@ -268,18 +268,20 @@ export default function ClientFilesPage() {
             className="hidden"
             id="file-upload"
           />
-          <label
-            htmlFor="file-upload"
-            className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-[var(--accent-orange)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--orange-600)] disabled:opacity-50"
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-orange)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--orange-600)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]"
           >
             <SvgIcon name="upload" size={16} color="white" />
             {uploading ? 'Uploading...' : 'Upload File'}
-          </label>
+          </button>
         </div>
       </div>
 
       {pageError && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm font-semibold text-red-500">
+        <div role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm font-semibold text-red-500">
           {pageError}
         </div>
       )}
@@ -335,7 +337,7 @@ export default function ClientFilesPage() {
                       type="button"
                       onClick={() => handleDownload(file)}
                       disabled={downloadingId === file.id}
-                      className="inline-flex items-center gap-1 text-sm text-[var(--accent-orange)] hover:underline disabled:cursor-wait disabled:opacity-60"
+                      className="inline-flex items-center gap-1 text-sm text-[var(--accent-orange)] hover:underline disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]"
                     >
                       {downloadingId === file.id ? 'Preparing...' : 'Download'}
                       <SvgIcon name="download" size={14} color="var(--accent-orange)" />

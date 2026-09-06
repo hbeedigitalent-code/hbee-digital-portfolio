@@ -191,8 +191,10 @@ export default function ClientSettingsPage() {
               )}
             </div>
             <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
+              aria-label="Change profile photo"
               className="absolute -bottom-1 -right-1 rounded-full bg-[var(--accent)] p-2 text-white hover:opacity-80 disabled:opacity-50 transition"
             >
               <SvgIcon name="edit" size={16} color="white" />
@@ -223,8 +225,9 @@ export default function ClientSettingsPage() {
         <form onSubmit={handleSubmit}>
           <div className="grid gap-5 md:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-bold text-[var(--text-secondary)]">Full Name</label>
+              <label htmlFor="settings-full-name" className="mb-1 block text-sm font-bold text-[var(--text-secondary)]">Full Name</label>
               <input
+                id="settings-full-name"
                 value={formData.full_name}
                 onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                 className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-section)] px-4 py-2.5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
@@ -232,8 +235,9 @@ export default function ClientSettingsPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-bold text-[var(--text-secondary)]">Business Name</label>
+              <label htmlFor="settings-business-name" className="mb-1 block text-sm font-bold text-[var(--text-secondary)]">Business Name</label>
               <input
+                id="settings-business-name"
                 value={formData.business_name}
                 onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
                 className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-section)] px-4 py-2.5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
@@ -241,8 +245,9 @@ export default function ClientSettingsPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-bold text-[var(--text-secondary)]">Email Address</label>
+              <label htmlFor="settings-email" className="mb-1 block text-sm font-bold text-[var(--text-secondary)]">Email Address</label>
               <input
+                id="settings-email"
                 value={formData.email}
                 disabled
                 className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-section)] px-4 py-2.5 text-[var(--text-muted)] cursor-not-allowed"
@@ -250,8 +255,9 @@ export default function ClientSettingsPage() {
               <p className="mt-1 text-xs text-[var(--text-muted)]">Email cannot be changed</p>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-bold text-[var(--text-secondary)]">WhatsApp</label>
+              <label htmlFor="settings-whatsapp" className="mb-1 block text-sm font-bold text-[var(--text-secondary)]">WhatsApp</label>
               <input
+                id="settings-whatsapp"
                 value={formData.whatsapp}
                 onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
                 className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-section)] px-4 py-2.5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
@@ -259,8 +265,9 @@ export default function ClientSettingsPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-bold text-[var(--text-secondary)]">Website</label>
+              <label htmlFor="settings-website" className="mb-1 block text-sm font-bold text-[var(--text-secondary)]">Website</label>
               <input
+                id="settings-website"
                 value={formData.website_url}
                 onChange={(e) => setFormData({ ...formData, website_url: e.target.value })}
                 className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-section)] px-4 py-2.5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
@@ -268,8 +275,9 @@ export default function ClientSettingsPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-bold text-[var(--text-secondary)]">Country</label>
+              <label htmlFor="settings-country" className="mb-1 block text-sm font-bold text-[var(--text-secondary)]">Country</label>
               <input
+                id="settings-country"
                 value={formData.country}
                 onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                 className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-section)] px-4 py-2.5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
@@ -298,12 +306,13 @@ export default function ClientSettingsPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-[var(--text-primary)]">Email Notifications</p>
+              <p id="notif-email-notifications" className="font-medium text-[var(--text-primary)]">Email Notifications</p>
               <p className="text-sm text-[var(--text-muted)]">Receive updates about your projects via email</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
+                aria-labelledby="notif-email-notifications"
                 checked={formData.notification_preferences.email_notifications}
                 onChange={(e) => setFormData({
                   ...formData,
@@ -319,12 +328,13 @@ export default function ClientSettingsPage() {
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-[var(--text-primary)]">Project Updates</p>
+              <p id="notif-project-updates" className="font-medium text-[var(--text-primary)]">Project Updates</p>
               <p className="text-sm text-[var(--text-muted)]">Get notified when your projects are updated</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
+                aria-labelledby="notif-project-updates"
                 checked={formData.notification_preferences.project_updates}
                 onChange={(e) => setFormData({
                   ...formData,
@@ -340,12 +350,13 @@ export default function ClientSettingsPage() {
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-[var(--text-primary)]">Marketing Emails</p>
+              <p id="notif-marketing-emails" className="font-medium text-[var(--text-primary)]">Marketing Emails</p>
               <p className="text-sm text-[var(--text-muted)]">Receive marketing and promotional emails</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
+                aria-labelledby="notif-marketing-emails"
                 checked={formData.notification_preferences.marketing_emails}
                 onChange={(e) => setFormData({
                   ...formData,
