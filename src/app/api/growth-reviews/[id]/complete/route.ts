@@ -2,6 +2,10 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import {
+  createNotification,
+  resolveClientIdByMerchantId,
+} from '@/lib/notifications/createNotification'
 
 // Use environment variables safely
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -159,18 +163,28 @@ export async function POST(
         updated_at: new Date().toISOString()
       }, { onConflict: 'merchant_id' })
 
-    // 5. Create notification for merchant
-    await supabase
-      .from('notifications')
-      .insert({
-        user_id: merchant_id,
-        user_type: 'merchant',
+    // 5. Create the client notification via the trusted server-side helper.
+    //    Resolve the authoritative clients.id from the legacy merchant_id; if
+    //    no client row exists, skip the in-app notification (no fabricated
+    //    UUID) and preserve the rest of the completion flow.
+    const resolvedClientId = await resolveClientIdByMerchantId(merchant_id)
+    if (resolvedClientId) {
+      await createNotification({
+        scope: 'client',
+        recipientId: resolvedClientId,
+        legacyMerchantId: merchant_id,
         type: 'growth_profile_ready',
         title: 'Growth Profile Ready',
         message: `Your Growth Profile is ready! You have been classified as ${growth_classification || 'Growth Potential'}.`,
+        entityType: 'growth_profile',
+        entityId: profile.id,
         link: '/client-portal/growth-profile',
-        created_at: new Date().toISOString()
       })
+    } else {
+      console.warn(
+        `[growth-reviews/${id}/complete] no client row for merchant ${merchant_id}; in-app notification skipped`,
+      )
+    }
 
     // 6. Update client record
     await supabase

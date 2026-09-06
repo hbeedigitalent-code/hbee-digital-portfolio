@@ -12,6 +12,7 @@ import {
   detectPrimaryConstraint
 } from '@/lib/scoring/hgri-scoring'
 import { FormData } from '@/types/growth-readiness'
+import { createNotification } from '@/lib/notifications/createNotification'
 
 // Lazy initialize Supabase client
 let supabaseAdmin: any = null
@@ -266,22 +267,18 @@ export async function POST(request: NextRequest) {
       console.error('Admin notification email error:', emailError)
     }
 
-    // 7. Create admin notification in database
-    try {
-      await supabase
-        .from('notifications')
-        .insert({
-          user_id: 'admin',
-          user_type: 'admin',
-          type: 'assessment_submitted',
-          title: 'New Assessment Submitted',
-          message: `${body.business_name} has submitted a growth assessment.`,
-          link: `/admin/growth-reviews/${review?.id || assessment.id}`,
-          created_at: new Date().toISOString()
-        })
-    } catch (notifError) {
-      console.error('Notification creation error:', notifError)
-    }
+    // 7. Create the admin notification via the trusted server-side helper.
+    //    createNotification never throws; any failure is logged inside it.
+    await createNotification({
+      scope: 'admin',
+      recipientId: null,
+      type: 'assessment_submitted',
+      title: 'New Assessment Submitted',
+      message: `${body.business_name} has submitted a growth assessment.`,
+      entityType: 'assessment',
+      entityId: assessment.id,
+      link: `/admin/growth-reviews/${review?.id || assessment.id}`,
+    })
 
     // 8. Send review started email to merchant
     try {
