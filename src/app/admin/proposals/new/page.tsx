@@ -5,9 +5,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClientComponentClient } from '@/lib/supabase-client'
-import { MerchantLifecycleService } from '@/lib/services/merchant-lifecycle'
-import { GrowthProfileService } from '@/lib/services/growth-profile-service'
 import SvgIcon from '@/components/ui/SvgIcon'
 import Button from '@/components/ui/Button'
 import StatusBadge from '@/components/ui/StatusBadge'
@@ -28,12 +25,17 @@ interface GrowthProfile {
   summary: string
 }
 
+// One merchant plus its active growth profiles, as returned by
+// GET /api/admin/proposals/options.
+interface MerchantOption extends Merchant {
+  profiles: GrowthProfile[]
+}
+
 export default function AdminProposalsNewPage() {
   const router = useRouter()
-  const supabase = createClientComponentClient()
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [merchants, setMerchants] = useState<Merchant[]>([])
+  const [merchants, setMerchants] = useState<MerchantOption[]>([])
   const [selectedMerchant, setSelectedMerchant] = useState<string>('')
   const [selectedProfile, setSelectedProfile] = useState<string>('')
   const [profiles, setProfiles] = useState<GrowthProfile[]>([])
@@ -51,89 +53,85 @@ export default function AdminProposalsNewPage() {
     expires_at: ''
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
+  const [optionsError, setOptionsError] = useState<string | null>(null)
 
-  // Load merchants with growth profiles
+  // Load the authorized merchant + growth-profile option set once. The server
+  // route re-verifies session, 2FA and active-admin, and only returns merchants
+  // that have at least one active growth profile.
   useEffect(() => {
-    fetchMerchants()
+    let cancelled = false
+
+    async function fetchOptions() {
+      setLoading(true)
+      setOptionsError(null)
+      try {
+        const response = await fetch('/api/admin/proposals/options', {
+          credentials: 'same-origin'
+        })
+        const payload = await response.json().catch(() => null)
+
+        if (cancelled) return
+
+        if (!response.ok || !Array.isArray(payload?.merchants)) {
+          console.error(
+            'Error fetching proposal options:',
+            payload?.error || `Request failed with status ${response.status}`
+          )
+          setOptionsError('Failed to load merchants. Please refresh and try again.')
+          setMerchants([])
+          return
+        }
+
+        const list = payload.merchants as MerchantOption[]
+        setMerchants(list)
+
+        // UI preselection only. Read straight from window.location so this page
+        // stays a plain client component — useSearchParams() would force a
+        // Suspense boundary. The value is applied only when it matches a
+        // merchant the authorized option set already returned, so it grants no
+        // access of its own.
+        const requested = new URLSearchParams(window.location.search).get('merchant')
+        if (requested && list.some((m) => m.id === requested)) {
+          setSelectedMerchant(requested)
+        }
+      } catch (error) {
+        console.error('Error:', error)
+        if (cancelled) return
+        setOptionsError('Failed to load merchants. Please refresh and try again.')
+        setMerchants([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    fetchOptions()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  // Load profiles when merchant is selected
+  // Derive the profile options from the selected merchant — the option set is
+  // already loaded, so this needs no second query.
   useEffect(() => {
-    if (selectedMerchant) {
-      fetchProfiles(selectedMerchant)
-    } else {
+    if (!selectedMerchant) {
       setProfiles([])
       setSelectedProfile('')
+      return
     }
-  }, [selectedMerchant])
 
-  async function fetchMerchants() {
-    setLoading(true)
-    try {
-      // Get merchants that have growth profiles ready
-      const { data, error } = await supabase
-        .from('merchant_status')
-        .select(`
-          merchant_id,
-          status,
-          merchant:merchants(
-            id,
-            business_name,
-            email,
-            website,
-            contact_name,
-            industry
-          )
-        `)
-        .in('status', ['growth_profile_ready', 'proposal_ready', 'lead'])
-        .order('last_activity', { ascending: false })
+    const merchantProfiles =
+      merchants.find((m) => m.id === selectedMerchant)?.profiles || []
 
-      if (error) {
-        console.error('Error fetching merchants:', error)
-        return
-      }
+    setProfiles(merchantProfiles)
 
-      const merchantList = data
-        .map((item: any) => item.merchant)
-        .filter((m: any) => m !== null)
-
-      setMerchants(merchantList)
-    } catch (error) {
-      console.error('Error:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function fetchProfiles(merchantId: string) {
-    try {
-      const { data, error } = await supabase
-        .from('growth_profiles')
-        .select(`
-          id,
-          hgri_score,
-          growth_classification,
-          summary
-        `)
-        .eq('merchant_id', merchantId)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Error fetching profiles:', error)
-        return
-      }
-
-      setProfiles(data || [])
-      
-      // Auto-select if only one profile
-      if (data && data.length === 1) {
-        setSelectedProfile(data[0].id)
-      }
-    } catch (error) {
-      console.error('Error:', error)
-    }
-  }
+    // Drop a selection that no longer belongs to this merchant, then keep the
+    // existing convenience of auto-selecting when there is exactly one profile.
+    setSelectedProfile((current) => {
+      if (current && merchantProfiles.some((p) => p.id === current)) return current
+      return merchantProfiles.length === 1 ? merchantProfiles[0].id : ''
+    })
+  }, [selectedMerchant, merchants])
 
   function addService() {
     setFormData({
@@ -184,50 +182,41 @@ export default function AdminProposalsNewPage() {
 
     setSubmitting(true)
     try {
-      // Calculate total
-      const total = formData.services.reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0)
-
-      const { data, error } = await supabase
-        .from('proposals')
-        .insert({
+      // The proposal insert, its server-generated proposal_number, the
+      // merchant-status advance and the client notification are all owned by
+      // the authenticated admin route. The browser sends form data only —
+      // never created_by, status, proposal_number, client_id or notification
+      // fields — and the server recomputes pricing.total from the services.
+      const response = await fetch('/api/admin/proposals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
           merchant_id: selectedMerchant,
+          growth_profile_id: selectedProfile,
           title: formData.title,
-          status: 'draft',
           services: formData.services,
-          pricing: {
-            ...formData.pricing,
-            total: total || formData.pricing.total
-          },
+          pricing: formData.pricing,
           timeline: formData.timeline,
           terms: formData.terms,
           notes: formData.notes,
-          expires_at: formData.expires_at || null,
-          created_by: (await supabase.auth.getUser()).data.user?.id
+          expires_at: formData.expires_at || null
         })
-        .select()
-        .single()
+      })
 
-      if (error) {
-        console.error('Error creating proposal:', error)
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok || !payload?.proposal?.id) {
+        console.error(
+          'Error creating proposal:',
+          payload?.error || `Request failed with status ${response.status}`
+        )
         alert('Failed to create proposal. Please try again.')
         return
       }
 
-      // Update merchant status
-      await MerchantLifecycleService.updateStatus(selectedMerchant, 'proposal_ready')
-
-      // Create notification for merchant
-      await MerchantLifecycleService.createNotification({
-        user_id: selectedMerchant,
-        user_type: 'merchant',
-        type: 'proposal_ready',
-        title: 'Proposal Ready',
-        message: `Your proposal "${formData.title}" is ready for review.`,
-        link: `/client-portal/proposals/${data.id}`
-      })
-
       // Redirect to proposal detail
-      router.push(`/admin/proposals/${data.id}`)
+      router.push(`/admin/proposals/${payload.proposal.id}`)
     } catch (error) {
       console.error('Error:', error)
       alert('An error occurred while creating the proposal.')
@@ -285,6 +274,14 @@ export default function AdminProposalsNewPage() {
               </select>
               {formErrors.merchant && (
                 <p className="mt-1 text-sm text-red-500">{formErrors.merchant}</p>
+              )}
+              {optionsError && (
+                <p className="mt-1 text-sm text-red-500">{optionsError}</p>
+              )}
+              {!optionsError && merchants.length === 0 && (
+                <p className="mt-1 text-sm text-yellow-500">
+                  No merchants with an active growth profile
+                </p>
               )}
             </div>
             <div>
