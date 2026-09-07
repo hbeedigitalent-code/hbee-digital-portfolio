@@ -170,6 +170,21 @@ export class GrowthProfileService {
 
   /**
    * Create growth profile from assessment (Existing method - kept for compatibility)
+   *
+   * Batch N1c: this is now a thin client of POST /api/admin/growth-profiles.
+   * That route authenticates the caller, verifies 2FA and active-admin status,
+   * derives merchant_id from the stored assessment, performs the profile
+   * insert plus the merchant-status and client-record updates, and creates the
+   * "growth profile ready" notification with the trusted server-side writer.
+   * This module is imported by 'use client' pages, so it must never import
+   * createNotification.ts, a service-role client, or read
+   * SUPABASE_SERVICE_ROLE_KEY.
+   *
+   * The signature and `GrowthProfile | null` return shape are unchanged so
+   * existing callers keep working. `adminUserId` is accepted for compatibility
+   * but intentionally ignored — the route uses the authenticated session user
+   * for `created_by`, which also fixes the old failure where a null
+   * reviewer_id sent an empty string into a uuid column.
    */
   static async createFromAssessment(
     assessmentId: string,
@@ -183,62 +198,47 @@ export class GrowthProfileService {
       pdf_url?: string
     }
   ): Promise<GrowthProfile | null> {
-    // Get assessment to get merchant_id
-    const { data: assessment, error: assessmentError } = await this.supabase
-      .from('growth_assessments')
-      .select('merchant_id')
-      .eq('id', assessmentId)
-      .single()
-
-    if (assessmentError || !assessment) {
-      console.error('Error fetching assessment:', assessmentError)
-      return null
-    }
-
-    // Create growth profile
-    const { data: profile, error } = await this.supabase
-      .from('growth_profiles')
-      .insert({
-        merchant_id: assessment.merchant_id,
-        assessment_id: assessmentId,
-        title: data.title,
-        summary: data.summary,
-        hgri_score: data.hgri_score,
-        growth_classification: data.growth_classification,
-        profile_data: data.profile_data || {},
-        pdf_url: data.pdf_url || null,
-        is_active: true,
-        created_by: adminUserId
+    try {
+      const response = await fetch('/api/admin/growth-profiles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          assessment_id: assessmentId,
+          title: data.title,
+          summary: data.summary,
+          hgri_score: data.hgri_score,
+          growth_classification: data.growth_classification,
+          profile_data: data.profile_data || {},
+          pdf_url: data.pdf_url || null
+        })
       })
-      .select()
-      .single()
 
-    if (error) {
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok || !payload?.profile) {
+        console.error(
+          'Error creating growth profile:',
+          payload?.error || `Request failed with status ${response.status}`
+        )
+        return null
+      }
+
+      return payload.profile as GrowthProfile
+    } catch (error) {
       console.error('Error creating growth profile:', error)
       return null
     }
-
-    // Update merchant status
-    await MerchantLifecycleService.updateStatus(assessment.merchant_id, 'growth_profile_ready')
-
-    // Update client record if exists
-    await this.updateClientGrowthProfile(assessment.merchant_id, profile.id, data.hgri_score, data.growth_classification)
-
-    // Create notification for merchant
-    await MerchantLifecycleService.createNotification({
-      user_id: assessment.merchant_id,
-      user_type: 'merchant',
-      type: 'growth_profile_ready',
-      title: 'Growth Profile Ready',
-      message: 'Your Growth Profile is now ready. Login to your client portal to view it.',
-      link: '/client-portal/growth-profile'
-    })
-
-    return profile as GrowthProfile
   }
 
   /**
    * Update client record with growth profile info
+   *
+   * Retained only for generateFromAssessment(), which is transitively dead
+   * (its sole caller, MerchantLifecycleService.completeGrowthReview(), has no
+   * call sites) and is deliberately left unchanged in this batch. The live
+   * path, createFromAssessment(), no longer uses this — POST
+   * /api/admin/growth-profiles performs the clients update server-side.
    */
   private static async updateClientGrowthProfile(
     merchantId: string,

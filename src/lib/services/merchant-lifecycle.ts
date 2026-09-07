@@ -192,14 +192,12 @@ export class MerchantLifecycleService {
 
     await this.updateStatus(data.merchant_id, 'review_in_progress')
 
-    await this.createNotification({
-      user_id: 'admin',
-      user_type: 'admin',
-      type: 'review_started',
-      title: 'New Review Started',
-      message: `A growth review has been started for merchant ${data.merchant_id}`,
-      link: `/admin/growth-reviews/${review.id}`
-    })
+    // Batch N1c: the "New Review Started" admin notification used to be written
+    // here with user_id: 'admin', which the uuid column always rejected with
+    // 22P02 — it never persisted. This method is itself dead (no call sites).
+    // Admin notifications are now created only by trusted server-side code; if
+    // this path ever gains a real caller it must POST to an authenticated
+    // admin route instead.
 
     return review as GrowthReview
   }
@@ -403,7 +401,23 @@ export class MerchantLifecycleService {
   }
 
   /**
-   * Create notification
+   * @deprecated Batch N1c removed the browser-side notification write.
+   *
+   * This module is imported by 'use client' pages, so it can never reach
+   * src/lib/notifications/createNotification.ts (which builds a service-role
+   * client). Rows written here omitted every N0 column — recipient_scope,
+   * recipient_id, entity_type, entity_id and idempotency_key — so they were
+   * invisible to any recipient-scoped feed and could not be deduplicated.
+   *
+   * Notifications are now created exclusively by trusted server-side code:
+   * POST /api/admin/growth-profiles, POST /api/admin/proposals, and the two
+   * N1 API routes. Each authenticates the caller, verifies active-admin
+   * status, resolves the recipient server-side, and writes the full N0 column
+   * set.
+   *
+   * The signature is kept so existing callers still compile. It performs no
+   * database write and always returns null; any remaining caller must be moved
+   * behind an authenticated server route.
    */
   static async createNotification(data: {
     user_id: string
@@ -413,21 +427,10 @@ export class MerchantLifecycleService {
     message: string
     link?: string
   }): Promise<Notification | null> {
-    const { data: notification, error } = await this.supabase
-      .from('notifications')
-      .insert({
-        ...data,
-        read: false
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Error creating notification:', error)
-      return null
-    }
-
-    return notification as Notification
+    console.warn(
+      `[MerchantLifecycleService.createNotification] deprecated no-op: "${data.type}" notifications must be created by an authenticated server route`
+    )
+    return null
   }
 
   /**
