@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClientComponentClient } from '@/lib/supabase-client'
 import { MerchantLifecycleService } from '@/lib/services/merchant-lifecycle'
+import { proposalStatusLabel, proposalStatusTransitions } from '@/lib/proposal-status'
 import StatusBadge from '@/components/ui/StatusBadge'
 import SvgIcon from '@/components/ui/SvgIcon'
 import Button from '@/components/ui/Button'
@@ -62,11 +63,13 @@ export default function AdminProposalDetailPage({ params }: PageProps) {
     setUpdating(true)
     try {
       const updates: any = { status }
-      
+
       if (status === 'sent') {
         updates.sent_at = new Date().toISOString()
       }
-      if (status === 'accepted') {
+      // 'approved' is the stored value; accepted_at is the existing timestamp
+      // column and is reused as-is — this batch adds no columns.
+      if (status === 'approved') {
         updates.accepted_at = new Date().toISOString()
         // Update merchant status
         await MerchantLifecycleService.updateStatus(proposal.merchant_id, 'proposal_accepted')
@@ -115,17 +118,9 @@ export default function AdminProposalDetailPage({ params }: PageProps) {
 
   const totalServices = proposal.services?.reduce((sum: number, s: any) => sum + (parseFloat(s.price) || 0), 0) || 0
 
-  const statusActions: Record<string, string[]> = {
-    'draft': ['sent'],
-    'sent': ['viewed'],
-    'viewed': ['accepted', 'rejected'],
-    'accepted': [],
-    'rejected': [],
-    'expired': [],
-    'converted': []
-  }
-
-  const availableActions = statusActions[proposal.status] || []
+  // Transitions come from the shared vocabulary in src/lib/proposal-status.ts
+  // so the list and detail pages can no longer drift apart.
+  const availableActions = proposalStatusTransitions(proposal.status)
 
   return (
     <div className="space-y-6">
@@ -159,7 +154,7 @@ export default function AdminProposalDetailPage({ params }: PageProps) {
               onClick={() => updateStatus(action)}
               disabled={updating}
             >
-              {action.charAt(0).toUpperCase() + action.slice(1)}
+              {proposalStatusLabel(action)}
             </Button>
           ))}
         </div>
@@ -278,7 +273,7 @@ export default function AdminProposalDetailPage({ params }: PageProps) {
               )}
               {proposal.accepted_at && (
                 <div className="flex items-center justify-between">
-                  <dt className="text-[var(--text-muted)]">Accepted</dt>
+                  <dt className="text-[var(--text-muted)]">Approved</dt>
                   <dd className="text-[var(--text-secondary)]">{new Date(proposal.accepted_at).toLocaleDateString()}</dd>
                 </div>
               )}
@@ -295,7 +290,7 @@ export default function AdminProposalDetailPage({ params }: PageProps) {
           <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6">
             <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Actions</h3>
             <div className="space-y-2">
-              {proposal.status === 'accepted' && (
+              {proposal.status === 'approved' && (
                 <Link href={`/admin/client-onboarding/new?proposal=${proposal.id}`}>
                   <Button className="w-full">
                     <SvgIcon name="users" size={16} color="white" />

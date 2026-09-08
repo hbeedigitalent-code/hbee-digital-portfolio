@@ -5,21 +5,72 @@ import { useEffect, useState } from 'react'
 import { createClientComponentClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import SvgIcon from '@/components/ui/SvgIcon'
-import { Proposal, ProposalStatus } from '@/types/admin-crm'
+import {
+  PROPOSAL_STATUSES,
+  proposalStatusLabel,
+  proposalStatusStyle,
+} from '@/lib/proposal-status'
 
-const statusColors: Record<ProposalStatus, string> = {
-  'Draft': 'bg-gray-500/20 text-gray-500',
-  'Sent': 'bg-blue-500/20 text-blue-500',
-  'Viewed': 'bg-yellow-500/20 text-yellow-500',
-  'Approved': 'bg-[var(--accent-lime)]/20 text-[var(--accent-lime)]',
-  'Rejected': 'bg-red-500/20 text-red-500',
-  'Expired': 'bg-gray-500/20 text-gray-500',
+// Local, accurate shape of the row this list actually reads. The
+// Proposal/ProposalStatus types in src/types/admin-crm.ts describe a different,
+// stale model (business_name, project_title, investment, share_link…) that the
+// live table and POST /api/admin/proposals do not use, so they are deliberately
+// not imported here. That file is left untouched because its Lead/Task types
+// are still used by other admin pages.
+interface ProposalPricing {
+  total?: number | string | null
+  currency?: string | null
+  payment_terms?: string | null
+}
+
+interface ProposalRow {
+  id: string
+  proposal_number: string | null
+  title: string | null
+  status: string | null
+  timeline: string | null
+  expires_at: string | null
+  created_at: string
+  merchant_id: string | null
+  pricing: ProposalPricing | null
+  merchant?: { business_name: string | null; contact_name: string | null; email: string | null } | null
+  client?: { business_name: string | null; full_name: string | null; email: string | null } | null
+}
+
+function businessLabel(proposal: ProposalRow): string {
+  return (
+    proposal.merchant?.business_name ||
+    proposal.client?.business_name ||
+    proposal.client?.full_name ||
+    proposal.merchant?.contact_name ||
+    '—'
+  )
+}
+
+function formatInvestment(pricing: ProposalPricing | null): string {
+  const total = Number(pricing?.total)
+  if (!Number.isFinite(total)) return '—'
+
+  const currency = pricing?.currency || 'USD'
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(total)
+  } catch {
+    // Unknown/invalid currency code — never let formatting break the row.
+    return `${currency} ${total.toLocaleString()}`
+  }
+}
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString()
 }
 
 export default function AdminProposalsPage() {
   const supabase = createClientComponentClient()
-  const [proposals, setProposals] = useState<Proposal[]>([])
+  const [proposals, setProposals] = useState<ProposalRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [stats, setStats] = useState({ total: 0, sent: 0, approved: 0 })
@@ -30,28 +81,49 @@ export default function AdminProposalsPage() {
 
   async function fetchProposals() {
     setLoading(true)
+    setLoadError(null)
 
+    // Same relation shape the detail page already uses successfully. The create
+    // route sets merchant_id only, so `client` may be null — both are optional
+    // in the display helpers above.
     const { data, error } = await supabase
       .from('proposals')
-      .select('*')
+      .select(`
+        *,
+        merchant:merchants(business_name, contact_name, email),
+        client:clients(business_name, full_name, email)
+      `)
       .order('created_at', { ascending: false })
 
-    if (!error && data) {
-      setProposals(data)
-      const total = data.length
-      const sent = data.filter((p: any) => p.status === 'Sent' || p.status === 'Viewed').length
-      const approved = data.filter((p: any) => p.status === 'Approved').length
-      setStats({ total, sent, approved })
+    if (error) {
+      // Previously this failed silently and rendered an empty table, which is
+      // exactly how the stale-field bug stayed invisible.
+      console.error('Error fetching proposals:', error)
+      setLoadError('Failed to load proposals. Please refresh and try again.')
+      setProposals([])
+      setStats({ total: 0, sent: 0, approved: 0 })
+      setLoading(false)
+      return
     }
+
+    const rows = (data || []) as ProposalRow[]
+    setProposals(rows)
+    setStats({
+      total: rows.length,
+      sent: rows.filter((p) => p.status === 'sent' || p.status === 'viewed').length,
+      approved: rows.filter((p) => p.status === 'approved').length,
+    })
 
     setLoading(false)
   }
 
-  const filteredProposals = proposals.filter(proposal => {
-    const matchesSearch = 
-      proposal.project_title?.toLowerCase().includes(search.toLowerCase()) ||
-      proposal.business_name?.toLowerCase().includes(search.toLowerCase()) ||
-      proposal.proposal_number?.toLowerCase().includes(search.toLowerCase())
+  const filteredProposals = proposals.filter((proposal) => {
+    const q = search.trim().toLowerCase()
+    const matchesSearch =
+      q === '' ||
+      (proposal.title?.toLowerCase().includes(q) ?? false) ||
+      (proposal.proposal_number?.toLowerCase().includes(q) ?? false) ||
+      businessLabel(proposal).toLowerCase().includes(q)
     const matchesStatus = statusFilter === 'all' || proposal.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -82,11 +154,11 @@ export default function AdminProposalsPage() {
           <div className="text-sm text-[var(--text-muted)]">Total Proposals</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 text-center">
-          <div className="text-2xl font-bold text-blue-500">{stats.sent}</div>
+          <div className="text-2xl font-bold text-[var(--accent)]">{stats.sent}</div>
           <div className="text-sm text-[var(--text-muted)]">Sent</div>
         </div>
         <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 text-center">
-          <div className="text-2xl font-bold text-[var(--accent-lime)]">{stats.approved}</div>
+          <div className="text-2xl font-bold text-[var(--success)]">{stats.approved}</div>
           <div className="text-sm text-[var(--text-muted)]">Approved</div>
         </div>
       </div>
@@ -109,11 +181,19 @@ export default function AdminProposalsPage() {
             className="rounded-lg border border-[var(--border)] bg-[var(--bg-page)] px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
           >
             <option value="all">All Statuses</option>
-            {Object.keys(statusColors).map((status) => (
-              <option key={status} value={status}>{status}</option>
+            {PROPOSAL_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {proposalStatusLabel(status)}
+              </option>
             ))}
           </select>
         </div>
+
+        {loadError && (
+          <p role="alert" className="mt-3 text-sm text-red-500">
+            {loadError}
+          </p>
+        )}
 
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-sm">
@@ -122,7 +202,9 @@ export default function AdminProposalsPage() {
                 <th className="pb-3 font-medium">Proposal</th>
                 <th className="pb-3 font-medium">Client/Business</th>
                 <th className="pb-3 font-medium">Investment</th>
+                <th className="pb-3 font-medium">Timeline</th>
                 <th className="pb-3 font-medium">Status</th>
+                <th className="pb-3 font-medium">Expires</th>
                 <th className="pb-3 font-medium">Created</th>
                 <th className="pb-3 font-medium text-right">Action</th>
               </tr>
@@ -130,7 +212,7 @@ export default function AdminProposalsPage() {
             <tbody>
               {filteredProposals.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-[var(--text-muted)]">
+                  <td colSpan={8} className="py-8 text-center text-[var(--text-muted)]">
                     No proposals found
                   </td>
                 </tr>
@@ -138,22 +220,23 @@ export default function AdminProposalsPage() {
                 filteredProposals.map((proposal) => (
                   <tr key={proposal.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-section)]">
                     <td className="py-3 font-medium text-[var(--text-primary)]">
-                      {proposal.proposal_number}
+                      {proposal.title || 'Untitled proposal'}
+                      <p className="text-xs text-[var(--text-muted)]">{proposal.proposal_number || '—'}</p>
                     </td>
-                    <td className="py-3 text-[var(--text-muted)]">
-                      {proposal.business_name || proposal.project_title}
-                    </td>
+                    <td className="py-3 text-[var(--text-muted)]">{businessLabel(proposal)}</td>
                     <td className="py-3 text-[var(--text-primary)]">
-                      ${proposal.investment?.toLocaleString() || 'N/A'}
+                      {formatInvestment(proposal.pricing)}
                     </td>
+                    <td className="py-3 text-[var(--text-muted)]">{proposal.timeline || '—'}</td>
                     <td className="py-3">
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusColors[proposal.status as ProposalStatus]}`}>
-                        {proposal.status}
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs font-medium ${proposalStatusStyle(proposal.status)}`}
+                      >
+                        {proposalStatusLabel(proposal.status)}
                       </span>
                     </td>
-                    <td className="py-3 text-[var(--text-muted)]">
-                      {new Date(proposal.created_at).toLocaleDateString()}
-                    </td>
+                    <td className="py-3 text-[var(--text-muted)]">{formatDate(proposal.expires_at)}</td>
+                    <td className="py-3 text-[var(--text-muted)]">{formatDate(proposal.created_at)}</td>
                     <td className="py-3 text-right">
                       <Link
                         href={`/admin/proposals/${proposal.id}`}
