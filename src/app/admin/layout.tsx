@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import SvgIcon from '@/components/ui/SvgIcon'
 import ThemeToggle from '@/components/ThemeToggle'
+import NotificationBell from '@/components/notifications/NotificationBell'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -274,14 +275,30 @@ const navItems = [
             <div className="flex items-center gap-4">
               <ThemeToggle />
 
-              <Link href="/admin/inquiries" className="relative">
-                <SvgIcon name="bell" size={20} color="var(--text-muted)" />
+              {/* Inquiries — unread contact_submissions. Kept as its own
+                  indicator; it is NOT the notification count. The bell icon
+                  now belongs to notifications, so this uses the same "email"
+                  icon as the Inquiries sidebar entry. */}
+              <Link
+                href="/admin/inquiries"
+                aria-label={
+                  unreadInquiries > 0 ? `Inquiries, ${unreadInquiries} unread` : 'Inquiries'
+                }
+                className="relative p-2 rounded-lg hover:bg-[var(--bg-section)] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]"
+              >
+                <SvgIcon name="email" size={20} color="var(--text-muted)" />
                 {unreadInquiries > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center"
+                  >
                     {unreadInquiries > 99 ? '99+' : unreadInquiries}
                   </span>
                 )}
               </Link>
+
+              {/* Notifications — real unread count from /api/notifications */}
+              <NotificationBell />
 
               {/* Profile Dropdown */}
               <div className="relative">
