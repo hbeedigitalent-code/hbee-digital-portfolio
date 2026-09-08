@@ -25,10 +25,18 @@ interface GrowthProfile {
   summary: string
 }
 
-// One merchant plus its active growth profiles, as returned by
+// One merchant plus optional metadata, as returned by
 // GET /api/admin/proposals/options.
+//
+// Eligibility: a draft proposal needs a valid merchant only. Neither an active
+// growth profile nor a client-portal link is required — both flags below are
+// informational. A client link becomes required only for the future
+// portal-send action.
 interface MerchantOption extends Merchant {
   profiles: GrowthProfile[]
+  has_active_growth_profile?: boolean
+  has_client_portal_link?: boolean
+  client_id?: string | null
 }
 
 export default function AdminProposalsNewPage() {
@@ -152,6 +160,8 @@ export default function AdminProposalsNewPage() {
     setFormData({ ...formData, services: newServices })
   }
 
+  const selectedMerchantOption = merchants.find((m) => m.id === selectedMerchant) || null
+
   function validateForm(): boolean {
     const errors: Record<string, string> = {}
 
@@ -161,9 +171,9 @@ export default function AdminProposalsNewPage() {
     if (!formData.title.trim()) {
       errors.title = 'Please enter a proposal title'
     }
-    if (!selectedProfile) {
-      errors.profile = 'Please select a growth profile'
-    }
+    // A growth profile is intentionally NOT required: a draft proposal can be
+    // created for any valid merchant, including one that has never been through
+    // a growth review.
     if (formData.services.some(s => !s.name.trim())) {
       errors.services = 'Please enter service names'
     }
@@ -193,7 +203,8 @@ export default function AdminProposalsNewPage() {
         credentials: 'same-origin',
         body: JSON.stringify({
           merchant_id: selectedMerchant,
-          growth_profile_id: selectedProfile,
+          // Optional — omitted entirely when the merchant has no profile.
+          growth_profile_id: selectedProfile || null,
           title: formData.title,
           services: formData.services,
           pricing: formData.pricing,
@@ -279,31 +290,43 @@ export default function AdminProposalsNewPage() {
                 <p className="mt-1 text-sm text-red-500">{optionsError}</p>
               )}
               {!optionsError && merchants.length === 0 && (
-                <p className="mt-1 text-sm text-yellow-500">
-                  No merchants with an active growth profile
-                </p>
+                <p className="mt-1 text-sm text-yellow-500">No merchants found</p>
+              )}
+              {/* Informational only — an unlinked merchant is still a valid
+                  choice for a draft. The link matters when the proposal is
+                  later sent to the client portal. */}
+              {selectedMerchantOption && (
+                selectedMerchantOption.has_client_portal_link ? (
+                  <p className="mt-1 text-sm text-[var(--success)]">Client portal linked</p>
+                ) : (
+                  <p className="mt-1 text-sm text-yellow-500">
+                    No client portal account linked. You can still create and edit this draft;
+                    sending it to the client portal will require linking a client first.
+                  </p>
+                )
               )}
             </div>
             <div>
-              <label className="text-sm font-medium text-[var(--text-secondary)]">Growth Profile *</label>
+              <label className="text-sm font-medium text-[var(--text-secondary)]">
+                Growth Profile <span className="text-[var(--text-muted)]">(optional)</span>
+              </label>
               <select
                 value={selectedProfile}
                 onChange={(e) => setSelectedProfile(e.target.value)}
-                disabled={!selectedMerchant}
-                className={`mt-1 w-full rounded-lg border ${formErrors.profile ? 'border-red-500' : 'border-[var(--border)]'} bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none disabled:opacity-50`}
+                disabled={!selectedMerchant || profiles.length === 0}
+                className={`mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-page)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--accent)] focus:outline-none disabled:opacity-50`}
               >
-                <option value="">Select a profile...</option>
+                <option value="">No growth profile</option>
                 {profiles.map((profile) => (
                   <option key={profile.id} value={profile.id}>
                     HGRI: {profile.hgri_score} - {profile.growth_classification}
                   </option>
                 ))}
               </select>
-              {formErrors.profile && (
-                <p className="mt-1 text-sm text-red-500">{formErrors.profile}</p>
-              )}
               {selectedMerchant && profiles.length === 0 && (
-                <p className="mt-1 text-sm text-yellow-500">No growth profiles found for this merchant</p>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                  No growth profile for this merchant — not required to create a proposal.
+                </p>
               )}
             </div>
           </div>

@@ -28,10 +28,7 @@ import { cookies } from 'next/headers'
 import { randomBytes } from 'crypto'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { ADMIN_2FA_COOKIE_NAME, verifyAdmin2FACookie } from '@/lib/admin-2fa-cookie'
-import {
-  createNotification,
-  resolveClientIdByMerchantId,
-} from '@/lib/notifications/createNotification'
+import { resolveClientIdByMerchantId } from '@/lib/notifications/createNotification'
 
 // Lazy, non-throwing service-role client — the same defensive pattern used by
 // the other /api/admin routes. Deliberately NOT the shared
@@ -149,7 +146,10 @@ export async function POST(request: Request) {
     if (!UUID_RE.test(merchantId)) {
       return NextResponse.json({ error: 'A valid merchant is required' }, { status: 400 })
     }
-    if (!UUID_RE.test(growthProfileId)) {
+    // A growth profile is OPTIONAL for a draft proposal. When one is supplied
+    // it must still be a well-formed UUID and is integrity-checked below;
+    // when it is absent the proposal is created without it.
+    if (growthProfileId && !UUID_RE.test(growthProfileId)) {
       return NextResponse.json({ error: 'A valid growth profile is required' }, { status: 400 })
     }
     if (!title) {
@@ -208,29 +208,48 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Merchant not found' }, { status: 404 })
     }
 
-    // 6. The referenced growth profile must exist, be active, and belong to
-    //    that same merchant — the browser's pairing is never taken on trust.
-    const { data: profileRow } = await adminClient
-      .from('growth_profiles')
-      .select('id, merchant_id, is_active')
-      .eq('id', growthProfileId)
-      .maybeSingle()
+    // 6. If a growth profile WAS supplied it must exist, be active, and belong
+    //    to that same merchant — the browser's pairing is never taken on trust.
+    //    A proposal without one is perfectly valid.
+    if (growthProfileId) {
+      const { data: profileRow } = await adminClient
+        .from('growth_profiles')
+        .select('id, merchant_id, is_active')
+        .eq('id', growthProfileId)
+        .maybeSingle()
 
-    if (!profileRow) {
-      return NextResponse.json({ error: 'Growth profile not found' }, { status: 404 })
+      if (!profileRow) {
+        return NextResponse.json({ error: 'Growth profile not found' }, { status: 404 })
+      }
+      if (!profileRow.is_active) {
+        return NextResponse.json(
+          { error: 'The selected growth profile is not active' },
+          { status: 400 },
+        )
+      }
+      if (profileRow.merchant_id !== merchantId) {
+        return NextResponse.json(
+          { error: 'The selected growth profile does not belong to the selected merchant' },
+          { status: 400 },
+        )
+      }
     }
-    if (!profileRow.is_active) {
-      return NextResponse.json(
-        { error: 'The selected growth profile is not active' },
-        { status: 400 },
-      )
-    }
-    if (profileRow.merchant_id !== merchantId) {
-      return NextResponse.json(
-        { error: 'The selected growth profile does not belong to the selected merchant' },
-        { status: 400 },
-      )
-    }
+
+    // 6b. Resolve the owning client server-side, when one exists.
+    //
+    //     Lifecycle rule this route implements:
+    //       Draft creation — merchant required; client link OPTIONAL.
+    //       Portal send    — client link REQUIRED (a draft cannot be delivered
+    //                        to a portal account that does not exist). That
+    //                        send transition is not implemented yet.
+    //       Notification / email — only after a valid send transition AND a
+    //                        client link. Nothing is emitted here.
+    //
+    //     The mapping is derived from the stored merchant via the existing
+    //     helper (clients.merchant_id = merchants.id). A client_id supplied by
+    //     the browser is never read or trusted, and one is never fabricated:
+    //     an unlinked merchant yields NULL, which proposals.client_id accepts.
+    const resolvedClientId = await resolveClientIdByMerchantId(merchantId)
 
     // 7. Insert with a server-generated proposal_number. The number is
     //    pre-checked for collisions; a 23505 between the check and the insert
@@ -239,6 +258,11 @@ export async function POST(request: Request) {
 
     const basePayload: Record<string, any> = {
       merchant_id: merchantId,
+      // Server-resolved owner, or NULL when the merchant has no client-portal
+      // account yet. merchant_id is retained for legacy compatibility;
+      // client_id is the identity every client-facing ownership check will use
+      // once the proposal is actually sent.
+      client_id: resolvedClientId,
       title,
       status: 'draft',
       services,
@@ -310,27 +334,18 @@ export async function POST(request: Request) {
       console.error('⚠️ Proposal created but merchant status update failed:', statusError)
     }
 
-    // 9. Client notification via the trusted server-side writer. recipient_id
-    //    is resolved from the merchant here and is never taken from the
-    //    request. No direct notifications insert, no email in this batch.
-    const recipientClientId = await resolveClientIdByMerchantId(merchantId)
-    if (recipientClientId) {
-      await createNotification({
-        scope: 'client',
-        recipientId: recipientClientId,
-        legacyMerchantId: merchantId,
-        type: 'proposal_ready',
-        title: 'Proposal Ready',
-        message: `Your proposal "${title}" is ready for review.`,
-        entityType: 'proposal',
-        entityId: proposal.id,
-        link: `/client-portal/proposals/${proposal.id}`,
-      })
-    } else {
-      console.warn(
-        '[api/admin/proposals] no client row for the selected merchant; in-app notification skipped',
-      )
-    }
+    // 9. NO client notification is created here.
+    //
+    //    A "Proposal Ready" notification used to fire at this point, but the
+    //    proposal is still `draft` — the client should not be told about a
+    //    proposal that has not been sent. It also linked to
+    //    /client-portal/proposals/{id}, a route that does not exist, so the
+    //    client was pointed at a 404.
+    //
+    //    The notification will be reintroduced when two things exist: the
+    //    client proposal review page, and a send action that moves the status
+    //    draft -> sent. It belongs on that transition, not on creation. No
+    //    email is sent here either.
 
     return NextResponse.json({ success: true, proposal })
   } catch (error) {
