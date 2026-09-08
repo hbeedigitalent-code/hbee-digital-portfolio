@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { createClientComponentClient } from '@/lib/supabase-client'
 import SvgIcon from '@/components/ui/SvgIcon'
 import ThemeToggle from '@/components/ThemeToggle'
+import ClientNotificationBell from '@/components/notifications/ClientNotificationBell'
 
 export default function ClientPortalLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -187,11 +188,10 @@ export default function ClientPortalLayout({ children }: { children: React.React
             <div className="flex items-center gap-4">
               <ThemeToggle />
 
-              {/* Notification */}
-              <button className="relative p-2 rounded-lg hover:bg-[var(--bg-section)] transition">
-                <SvgIcon name="bell" size={20} color="var(--text-muted)" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" />
-              </button>
+              {/* Notifications — real unread count from /api/notifications.
+                  Replaces the previous placeholder button, which had no
+                  handler and rendered an unconditional red dot. */}
+              <ClientNotificationBell />
 
               {/* Profile Dropdown */}
               <div className="relative">
