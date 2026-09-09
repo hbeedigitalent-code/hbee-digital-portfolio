@@ -2,12 +2,17 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClientComponentClient } from '@/lib/supabase-client'
 import { MerchantLifecycleService } from '@/lib/services/merchant-lifecycle'
 import { proposalStatusLabel, proposalStatusTransitions } from '@/lib/proposal-status'
+import {
+  MAX_PROPOSAL_FILE_LABEL,
+  PROPOSAL_FILE_ACCEPT_ATTRIBUTE,
+  formatFileSize,
+} from '@/lib/proposal-file-validation'
 import StatusBadge from '@/components/ui/StatusBadge'
 import SvgIcon from '@/components/ui/SvgIcon'
 import Button from '@/components/ui/Button'
@@ -18,6 +23,24 @@ interface PageProps {
   }
 }
 
+interface ProposalFile {
+  id: string
+  proposal_id: string
+  file_name: string
+  file_type: string
+  file_size: number
+  uploaded_at: string
+}
+
+const FOCUS_RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)]'
+
+function fileExtensionLabel(fileName: string): string {
+  const lastDot = fileName.lastIndexOf('.')
+  if (lastDot <= 0 || lastDot === fileName.length - 1) return 'FILE'
+  return fileName.slice(lastDot + 1).toUpperCase()
+}
+
 export default function AdminProposalDetailPage({ params }: PageProps) {
   const router = useRouter()
   const supabase = createClientComponentClient()
@@ -26,9 +49,133 @@ export default function AdminProposalDetailPage({ params }: PageProps) {
   const [merchant, setMerchant] = useState<any>(null)
   const [updating, setUpdating] = useState(false)
 
+  // Attachments. All reads/writes go through the authenticated admin API —
+  // never a direct browser query against proposal_files or Storage.
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [files, setFiles] = useState<ProposalFile[]>([])
+  const [filesLoading, setFilesLoading] = useState(true)
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [fileError, setFileError] = useState<string | null>(null)
+  const [busyFileId, setBusyFileId] = useState<string | null>(null)
+
   useEffect(() => {
     fetchProposal()
   }, [params.id])
+
+  const fetchFiles = useCallback(async () => {
+    setFilesLoading(true)
+    try {
+      const response = await fetch(`/api/admin/proposals/${params.id}/files`, {
+        credentials: 'same-origin',
+      })
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok || !Array.isArray(payload?.files)) {
+        console.error('Error fetching attachments:', payload?.error || response.status)
+        setFileError('Could not load attachments.')
+        setFiles([])
+        return
+      }
+
+      setFiles(payload.files as ProposalFile[])
+    } catch (error) {
+      console.error('Error:', error)
+      setFileError('Could not load attachments.')
+      setFiles([])
+    } finally {
+      setFilesLoading(false)
+    }
+  }, [params.id])
+
+  useEffect(() => {
+    fetchFiles()
+  }, [fetchFiles])
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setFileError(null)
+    setUploadingFile(true)
+
+    try {
+      const body = new FormData()
+      body.append('file', file)
+
+      // Only the file is sent. proposal_id comes from the URL, and client_id,
+      // uploaded_by and object_path are all derived server-side.
+      const response = await fetch(`/api/admin/proposals/${params.id}/files`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        body,
+      })
+
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok || !payload?.file) {
+        setFileError(payload?.error || 'Failed to upload file. Please try again.')
+        return
+      }
+
+      await fetchFiles()
+    } catch (error) {
+      console.error('Error:', error)
+      setFileError('Failed to upload file. Please try again.')
+    } finally {
+      setUploadingFile(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleDownload(file: ProposalFile) {
+    setFileError(null)
+    setBusyFileId(file.id)
+    try {
+      const response = await fetch(
+        `/api/admin/proposals/${params.id}/files/${file.id}/signed-url`,
+        { credentials: 'same-origin' },
+      )
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok || !payload?.url) {
+        setFileError('Could not generate a download link.')
+        return
+      }
+
+      window.open(payload.url, '_blank', 'noopener,noreferrer')
+    } catch (error) {
+      console.error('Error:', error)
+      setFileError('Could not generate a download link.')
+    } finally {
+      setBusyFileId(null)
+    }
+  }
+
+  async function handleDeleteFile(file: ProposalFile) {
+    if (!confirm(`Delete "${file.file_name}"? This cannot be undone.`)) return
+
+    setFileError(null)
+    setBusyFileId(file.id)
+    try {
+      const response = await fetch(
+        `/api/admin/proposals/${params.id}/files/${file.id}`,
+        { method: 'DELETE', credentials: 'same-origin' },
+      )
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        setFileError(payload?.error || 'Failed to delete file.')
+        return
+      }
+
+      await fetchFiles()
+    } catch (error) {
+      console.error('Error:', error)
+      setFileError('Failed to delete file.')
+    } finally {
+      setBusyFileId(null)
+    }
+  }
 
   async function fetchProposal() {
     setLoading(true)
@@ -216,6 +363,96 @@ export default function AdminProposalDetailPage({ params }: PageProps) {
               <p className="text-sm text-[var(--text-secondary)] whitespace-pre-wrap">{proposal.terms}</p>
             </div>
           )}
+
+          {/* Attachments — private proposal-files bucket, download-only.
+              Uploads and downloads go through the authenticated admin API;
+              storage paths are never exposed to the browser. */}
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">Attachments</h3>
+                <p className="text-xs text-[var(--text-muted)]">
+                  PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, CSV · max {MAX_PROPOSAL_FILE_LABEL}
+                </p>
+              </div>
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  id="proposal-file-upload"
+                  accept={PROPOSAL_FILE_ACCEPT_ATTRIBUTE}
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingFile}
+                  className={`inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50 ${FOCUS_RING}`}
+                >
+                  <SvgIcon name="upload" size={14} color="white" />
+                  {uploadingFile ? 'Uploading...' : 'Upload File'}
+                </button>
+              </div>
+            </div>
+
+            {fileError && (
+              <p role="alert" className="mb-3 text-sm text-red-500">
+                {fileError}
+              </p>
+            )}
+
+            {filesLoading ? (
+              <p className="text-sm text-[var(--text-muted)]">Loading attachments…</p>
+            ) : files.length === 0 ? (
+              <p className="text-sm text-[var(--text-muted)]">
+                No attachments yet. Upload the proposal document and any supporting files.
+              </p>
+            ) : (
+              <ul className="divide-y divide-[var(--border)]">
+                {files.map((file) => (
+                  <li
+                    key={file.id}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="flex min-w-0 items-start gap-3">
+                      <SvgIcon name="document" size={18} color="var(--text-muted)" />
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-[var(--text-primary)]" title={file.file_name}>
+                          {file.file_name}
+                        </p>
+                        <p className="text-xs text-[var(--text-muted)]">
+                          {fileExtensionLabel(file.file_name)} · {formatFileSize(file.file_size)} ·{' '}
+                          {file.uploaded_at ? new Date(file.uploaded_at).toLocaleDateString() : '—'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDownload(file)}
+                        disabled={busyFileId === file.id}
+                        className={`inline-flex items-center gap-1 text-sm text-[var(--accent)] hover:underline disabled:cursor-wait disabled:opacity-60 ${FOCUS_RING}`}
+                      >
+                        <SvgIcon name="download" size={14} color="var(--accent)" />
+                        Download
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteFile(file)}
+                        disabled={busyFileId === file.id}
+                        aria-label={`Delete ${file.file_name}`}
+                        className={`inline-flex items-center gap-1 text-sm text-red-500 hover:underline disabled:cursor-wait disabled:opacity-60 ${FOCUS_RING}`}
+                      >
+                        <SvgIcon name="trash" size={14} color="#ef4444" />
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
 
         {/* Sidebar */}
