@@ -4,15 +4,14 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { createClientComponentClient } from '@/lib/supabase-client'
 import StatusBadge from '@/components/ui/StatusBadge'
 import SvgIcon from '@/components/ui/SvgIcon'
 import Button from '@/components/ui/Button'
 
 export default function AdminGrowthProfilesPage() {
-  const supabase = createClientComponentClient()
   const [profiles, setProfiles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
 
@@ -23,31 +22,26 @@ export default function AdminGrowthProfilesPage() {
   async function fetchProfiles() {
     setLoading(true)
     try {
-      let query = supabase
-        .from('growth_profiles')
-        .select(`
-          *,
-          merchant:merchants(*),
-          assessment:growth_assessments(*)
-        `)
-        .order('created_at', { ascending: false })
+      // /api/admin/growth-profiles verifies session, user-bound admin 2FA and
+      // active admin membership before reading growth_profiles.
+      const response = await fetch(
+        `/api/admin/growth-profiles?filter=${encodeURIComponent(filter)}`,
+        { credentials: 'same-origin' },
+      )
+      const payload = await response.json().catch(() => null)
 
-      if (filter === 'active') {
-        query = query.eq('is_active', true)
-      } else if (filter === 'archived') {
-        query = query.eq('is_active', false)
-      }
-
-      const { data, error } = await query
-
-      if (error) {
-        console.error('Error fetching profiles:', error)
+      if (!response.ok || !Array.isArray(payload?.profiles)) {
+        setLoadError(payload?.error || 'Could not load profiles. Please refresh and try again.')
+        setProfiles([])
         return
       }
 
-      setProfiles(data || [])
+      setLoadError(null)
+      setProfiles(payload.profiles)
     } catch (error) {
       console.error('Error:', error)
+      setLoadError('Could not load profiles. Please refresh and try again.')
+      setProfiles([])
     } finally {
       setLoading(false)
     }
@@ -57,14 +51,16 @@ export default function AdminGrowthProfilesPage() {
     if (!confirm(`Are you sure you want to ${currentStatus ? 'archive' : 'activate'} this profile?`)) return
 
     try {
-      const { error } = await supabase
-        .from('growth_profiles')
-        .update({ is_active: !currentStatus })
-        .eq('id', profileId)
+      const response = await fetch(`/api/admin/growth-profiles/${profileId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ is_active: !currentStatus }),
+      })
 
-      if (error) {
-        console.error('Error updating profile:', error)
-        alert('Failed to update profile status.')
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        alert(payload?.error || 'Failed to update profile status.')
         return
       }
 
@@ -89,6 +85,27 @@ export default function AdminGrowthProfilesPage() {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+      </div>
+    )
+  }
+
+  // An authorization or database failure is shown as a real error. It must
+  // never render as an empty list, which would read as "no records".
+  if (loadError) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center text-center">
+        <SvgIcon name="warning" size={48} color="var(--error)" />
+        <h2 className="mt-4 text-xl font-semibold text-[var(--text-primary)]">
+          Could not load growth profiles
+        </h2>
+        <p className="mt-2 max-w-md text-[var(--text-secondary)]">{loadError}</p>
+        <button
+          type="button"
+          onClick={fetchProfiles}
+          className="mt-6 rounded-full bg-[var(--accent-orange)] px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+        >
+          Try Again
+        </button>
       </div>
     )
   }

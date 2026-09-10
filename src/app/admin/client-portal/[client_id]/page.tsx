@@ -67,17 +67,20 @@ export default function AdminClientDetailPage() {
   async function fetchClientData() {
     setLoading(true)
 
-    const { data: clientData, error: clientError } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('id', params.client_id)
-      .single()
+    // /api/admin/clients/[client_id] verifies session, user-bound admin 2FA and
+    // active admin membership. clients keeps only an own-row SELECT policy after
+    // the lockdown, so this record must be fetched server-side.
+    const clientResponse = await fetch(`/api/admin/clients/${params.client_id}`, {
+      credentials: 'same-origin',
+    })
+    const clientPayload = await clientResponse.json().catch(() => null)
 
-    if (clientError || !clientData) {
+    if (!clientResponse.ok || !clientPayload?.client) {
       router.push('/admin/client-portal')
       return
     }
 
+    const clientData = clientPayload.client
     setClient(clientData)
 
     const { data: projectData } = await supabase

@@ -5,7 +5,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClientComponentClient } from '@/lib/supabase-client'
 import StatusBadge from '@/components/ui/StatusBadge'
 import SvgIcon from '@/components/ui/SvgIcon'
 import Button from '@/components/ui/Button'
@@ -18,8 +17,8 @@ interface PageProps {
 
 export default function AdminGrowthProfileDetailPage({ params }: PageProps) {
   const router = useRouter()
-  const supabase = createClientComponentClient()
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [profile, setProfile] = useState<any>(null)
   const [merchant, setMerchant] = useState<any>(null)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
@@ -31,37 +30,26 @@ export default function AdminGrowthProfileDetailPage({ params }: PageProps) {
   async function fetchProfile() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('growth_profiles')
-        .select(`
-          *,
-          merchant:merchants(*),
-          assessment:growth_assessments(*)
-        `)
-        .eq('id', params.id)
-        .single()
+      // One call: /api/admin/growth-profiles/[id] returns the profile with its
+      // merchant, assessment and latest PDF, after verifying session, user-bound
+      // admin 2FA and active admin membership.
+      const response = await fetch(`/api/admin/growth-profiles/${params.id}`, {
+        credentials: 'same-origin',
+      })
+      const payload = await response.json().catch(() => null)
 
-      if (error) {
-        console.error('Error fetching profile:', error)
+      if (!response.ok || !payload?.profile) {
+        setLoadError(payload?.error || 'Could not load this profile. Please refresh and try again.')
         return
       }
 
-      setProfile(data)
-      setMerchant(data.merchant)
-
-      // Get PDF URL if exists
-      const { data: pdfData } = await supabase
-        .from('growth_profile_pdfs')
-        .select('file_url')
-        .eq('growth_profile_id', data.id)
-        .eq('is_latest', true)
-        .single()
-
-      if (pdfData) {
-        setPdfUrl(pdfData.file_url)
-      }
+      setLoadError(null)
+      setProfile(payload.profile)
+      setMerchant(payload.profile.merchant)
+      setPdfUrl(payload.pdf_url || null)
     } catch (error) {
       console.error('Error:', error)
+      setLoadError('Could not load this profile. Please refresh and try again.')
     } finally {
       setLoading(false)
     }
@@ -90,6 +78,27 @@ export default function AdminGrowthProfileDetailPage({ params }: PageProps) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+      </div>
+    )
+  }
+
+  // An authorization or database failure is shown as a real error. It must
+  // never render as an empty list, which would read as "no records".
+  if (loadError) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center text-center">
+        <SvgIcon name="warning" size={48} color="var(--error)" />
+        <h2 className="mt-4 text-xl font-semibold text-[var(--text-primary)]">
+          Could not load this profile
+        </h2>
+        <p className="mt-2 max-w-md text-[var(--text-secondary)]">{loadError}</p>
+        <button
+          type="button"
+          onClick={fetchProfile}
+          className="mt-6 rounded-full bg-[var(--accent-orange)] px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+        >
+          Try Again
+        </button>
       </div>
     )
   }

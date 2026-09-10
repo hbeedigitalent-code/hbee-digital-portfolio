@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClientComponentClient } from '@/lib/supabase-client'
-import { MerchantLifecycleService } from '@/lib/services/merchant-lifecycle'
 import { proposalStatusLabel, proposalStatusTransitions } from '@/lib/proposal-status'
 import {
   MAX_PROPOSAL_FILE_LABEL,
@@ -204,23 +203,119 @@ export default function AdminProposalDetailPage({ params }: PageProps) {
     }
   }
 
+  /**
+   * The SEND transition goes through the authenticated admin API, never a
+   * direct browser write.
+   *
+   * /api/admin/proposals/{id}/status re-verifies session + 2FA + active admin,
+   * reads client_id from the STORED row, and refuses to send a proposal whose
+   * client_id is NULL — a state in which no client account could ever open the
+   * proposal, because every client route requires
+   * proposals.client_id = <caller's clients.id>. It also emits the single
+   * client-scope `proposal_sent` notification server-side.
+   *
+   * Only the target status is sent. No client_id, merchant_id, sent_at or any
+   * other ownership/commercial field leaves the browser.
+   */
+  async function sendProposal() {
+    setUpdating(true)
+    try {
+      const response = await fetch(`/api/admin/proposals/${params.id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ status: 'sent' }),
+      })
+
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        alert(payload?.error || 'Failed to send this proposal.')
+        return
+      }
+
+      await fetchProposal()
+      alert('Proposal sent to the client portal.')
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Failed to send this proposal.')
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  /**
+   * The APPROVE transition, also server-routed.
+   *
+   * This used to be two browser writes: a direct proposals update, and
+   * MerchantLifecycleService.updateStatus() against merchant_status — a table
+   * the access lockdown closes to the browser. Both now happen inside
+   * /api/admin/proposals/{id}/status, which re-verifies session + 2FA +
+   * active admin and derives the merchant from the STORED proposal row.
+   *
+   * The two writes are separate statements and are NOT atomic. The response
+   * reports the lifecycle result separately, and a lifecycle failure is shown
+   * to the admin rather than folded into a success message.
+   */
+  async function approveProposal() {
+    setUpdating(true)
+    try {
+      const response = await fetch(`/api/admin/proposals/${params.id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ status: 'approved' }),
+      })
+
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        alert(payload?.error || 'Failed to approve this proposal.')
+        return
+      }
+
+      await fetchProposal()
+
+      if (payload?.lifecycle === 'updated') {
+        alert('Proposal approved.')
+      } else if (payload?.lifecycle === 'not_linked') {
+        alert(
+          'Proposal approved. It is not linked to a merchant, so no merchant stage was updated.',
+        )
+      } else if (payload?.lifecycle === 'no_status_row') {
+        alert(
+          'Proposal approved, but this merchant has no lifecycle record, so their stage was not updated.',
+        )
+      } else {
+        alert(
+          'Proposal approved, but the merchant stage could not be updated. Please update it manually.',
+        )
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Failed to approve this proposal.')
+    } finally {
+      setUpdating(false)
+    }
+  }
+
   async function updateStatus(status: string) {
     if (!confirm(`Change proposal status to "${status}"?`)) return
+
+    // Send and approve are both server-routed. Every other transition is a
+    // plain proposals update and is unchanged.
+    if (status === 'sent') {
+      await sendProposal()
+      return
+    }
+    if (status === 'approved') {
+      await approveProposal()
+      return
+    }
 
     setUpdating(true)
     try {
       const updates: any = { status }
-
-      if (status === 'sent') {
-        updates.sent_at = new Date().toISOString()
-      }
-      // 'approved' is the stored value; accepted_at is the existing timestamp
-      // column and is reused as-is — this batch adds no columns.
-      if (status === 'approved') {
-        updates.accepted_at = new Date().toISOString()
-        // Update merchant status
-        await MerchantLifecycleService.updateStatus(proposal.merchant_id, 'proposal_accepted')
-      }
 
       const { error } = await supabase
         .from('proposals')

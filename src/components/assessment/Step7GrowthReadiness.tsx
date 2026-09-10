@@ -2,8 +2,6 @@
 'use client'
 
 import { FormData } from '@/types/growth-readiness'
-import { useRef } from 'react'
-import SvgIcon from '@/components/ui/SvgIcon'
 
 interface Step7GrowthReadinessProps {
   formData: FormData
@@ -27,26 +25,13 @@ const timelines = [
 ]
 
 export function Step7GrowthReadiness({ formData, updateField, errors }: Step7GrowthReadinessProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('File size must be under 10MB')
-        return
-      }
-      updateField('uploaded_file', file)
-    }
-  }
-
-  const handleRemoveFile = () => {
-    updateField('uploaded_file', null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-  }
-
+  // The "Upload Supporting Documents" control that used to sit between the
+  // timeline question and the consent box has been removed. It was never
+  // functional: the File object was held in React state, and submission sends
+  // JSON.stringify(formData), which serialises a File to `{}`. The merchant saw
+  // their filename echoed back and the file was silently discarded — no request
+  // field, no storage bucket, no database column was ever written. Removed
+  // rather than repaired; a real upload path is separate work.
   return (
     <div className="space-y-6">
       <div>
@@ -94,44 +79,6 @@ export function Step7GrowthReadiness({ formData, updateField, errors }: Step7Gro
         </select>
         {errors.improvement_timeline && (
           <p className="mt-1 text-sm text-red-500">{errors.improvement_timeline}</p>
-        )}
-      </div>
-
-      <div>
-        <label className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
-          Upload Supporting Documents <span className="text-sm text-[var(--text-muted)]">(Optional)</span>
-        </label>
-        <div className="flex items-center gap-4">
-          <input
-            ref={fileInputRef}
-            type="file"
-            onChange={handleFileUpload}
-            className="hidden"
-            id="file-upload"
-            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-          />
-          <label
-            htmlFor="file-upload"
-            className="cursor-pointer rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-page)] px-6 py-4 text-center text-sm text-[var(--text-muted)] hover:border-[var(--accent-orange)] transition-colors w-full"
-          >
-            <div className="flex flex-col items-center gap-2">
-              <SvgIcon name="upload" size={24} color="var(--text-muted)" />
-              <span>Click to upload or drag and drop</span>
-              <span className="text-xs text-[var(--text-muted)]">PDF, DOC, JPG, PNG (Max 10MB)</span>
-            </div>
-          </label>
-        </div>
-        {formData.uploaded_file && (
-          <div className="mt-2 flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-section)] p-3">
-            <span className="text-sm text-[var(--text-primary)]">{formData.uploaded_file.name}</span>
-            <button
-              type="button"
-              onClick={handleRemoveFile}
-              className="ml-auto text-red-500 hover:text-red-400"
-            >
-              <SvgIcon name="x-close" size={16} color="currentColor" />
-            </button>
-          </div>
         )}
       </div>
 

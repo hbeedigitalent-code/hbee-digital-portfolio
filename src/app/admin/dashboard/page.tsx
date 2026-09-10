@@ -26,6 +26,7 @@ export default function AdminDashboardPage() {
   const supabase = createClientComponentClient()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [recentActivities, setRecentActivities] = useState<any[]>([])
   const [quickActions, setQuickActions] = useState([
     { name: 'New Assessment', href: '/admin/growth-assessments', icon: 'growth-readiness' },
@@ -42,33 +43,45 @@ export default function AdminDashboardPage() {
   async function fetchDashboardData() {
     setLoading(true)
 
+    // Tables moving behind server-side authorization (clients,
+    // growth_assessments, growth_scores) are read through
+    // /api/admin/dashboard-stats, which verifies session, user-bound admin 2FA
+    // and active admin membership. Every other tile below keeps its existing
+    // query — those tables are not part of this lockdown.
+    const statsResponse = await fetch('/api/admin/dashboard-stats', {
+      credentials: 'same-origin',
+    })
+    const adminStats = await statsResponse.json().catch(() => null)
+
+    if (!statsResponse.ok || !adminStats) {
+      setLoadError(adminStats?.error || 'Could not load dashboard statistics. Please refresh and try again.')
+      setLoading(false)
+      return
+    }
+
+    setLoadError(null)
+
     const [
       projectsRes,
-      clientsRes,
       leadsRes,
-      assessmentsRes,
       onboardingRes,
       tasksRes,
       inquiriesRes,
       invoicesRes,
-      growthScoresRes
     ] = await Promise.all([
       supabase.from('projects').select('status, progress', { count: 'exact' }),
-      supabase.from('clients').select('status', { count: 'exact' }),
       supabase.from('leads').select('status', { count: 'exact' }).eq('status', 'New Lead'),
-      supabase.from('growth_assessments').select('status', { count: 'exact' }).eq('status', 'New Submission'),
       supabase.from('client_onboarding_submissions').select('status', { count: 'exact' }).eq('status', 'New Submission'),
       supabase.from('tasks').select('status, due_date'),
       supabase.from('contact_submissions').select('is_read', { count: 'exact' }).eq('is_read', false),
       supabase.from('project_invoices').select('status, amount').eq('status', 'overdue'),
-      supabase.from('growth_scores').select('classification', { count: 'exact' }),
     ])
 
     const totalProjects = projectsRes.data?.length || 0
     const activeProjects = projectsRes.data?.filter((p: any) => p.status !== 'Completed' && p.status !== 'Archived').length || 0
-    const totalClients = clientsRes.data?.length || 0
+    const totalClients = adminStats.totalClients
     const newLeads = leadsRes.count || 0
-    const pendingAssessments = assessmentsRes.count || 0
+    const pendingAssessments = adminStats.pendingAssessments
     const pendingOnboarding = onboardingRes.count || 0
     
     const today = new Date()
@@ -91,8 +104,8 @@ export default function AdminDashboardPage() {
     const completedProjects = projectsRes.data?.filter((p: any) => p.status === 'Completed').length || 0
     const projectCompletionRate = totalProjects > 0 ? Math.round((completedProjects / totalProjects) * 100) : 0
 
-    const totalGrowthScores = growthScoresRes.data?.length || 0
-    const growthReady = growthScoresRes.data?.filter((s: any) => s.classification === 'Growth Ready' || s.classification === 'Scale Ready').length || 0
+    const totalGrowthScores = adminStats.totalGrowthScores
+    const growthReady = adminStats.growthReady
 
     setStats({
       totalProjects,
@@ -112,11 +125,7 @@ export default function AdminDashboardPage() {
 
     const activities: any[] = []
     
-    const { data: recentAssessments } = await supabase
-      .from('growth_assessments')
-      .select('id, status, created_at, merchants(business_name)')
-      .order('created_at', { ascending: false })
-      .limit(3)
+    const recentAssessments = adminStats.recentAssessments
 
     if (recentAssessments) {
       recentAssessments.forEach((a: any) => {

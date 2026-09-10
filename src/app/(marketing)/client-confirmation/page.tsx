@@ -16,11 +16,18 @@ function ConfirmationContent() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [message, setMessage] = useState('')
   const [title, setTitle] = useState('')
+  // A partial provisioning failure is shown explicitly. Confirmation itself
+  // still succeeded, so this is a notice alongside the success state rather
+  // than an error that replaces it.
+  const [setupIncomplete, setSetupIncomplete] = useState(false)
 
   useEffect(() => {
     async function handleConfirmation() {
       const confirmed = searchParams.get('confirmed')
       const error = searchParams.get('error')
+      // /api/auth/confirm sets this when the email verified but the client or
+      // merchant record could not be created.
+      const setup = searchParams.get('setup')
 
       // Check for error first
       if (error) {
@@ -41,29 +48,36 @@ function ConfirmationContent() {
         setStatus('success')
         setTitle('Email Confirmed! ✅')
         setMessage('Your email has been confirmed! You can now log in to your account.')
-        
-        // Check if client profile exists, if not create it
+
+        if (setup === 'incomplete') setSetupIncomplete(true)
+
+        // Account provisioning is server-side now.
+        //
+        // This block used to insert the clients row straight from the browser.
+        // After the access lockdown that write is not permitted, and it never
+        // created the merchant_accounts record at all.
+        //
+        // POST /api/account/provision verifies the session and provisions the
+        // CALLER'S OWN records from their verified auth record. It takes no
+        // parameters, so nothing about identity, status, verification or
+        // merchant links can be influenced from here. It is idempotent, so it
+        // is harmless when /api/auth/confirm has already provisioned during
+        // the redirect, and safe to retry.
         try {
-          const { data: { user } } = await supabase.auth.getUser()
-          if (user) {
-            const { data: existing } = await supabase
-              .from('clients')
-              .select('id')
-              .eq('user_id', user.id)
-              .maybeSingle()
-            
-            if (!existing) {
-              await supabase.from('clients').insert({
-                user_id: user.id,
-                full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Client',
-                email: user.email,
-                business_name: user.user_metadata?.business_name || 'My Business',
-                status: 'active',
-              })
-            }
+          const response = await fetch('/api/account/provision', {
+            method: 'POST',
+            credentials: 'same-origin',
+          })
+
+          // 401 simply means this page was reached without a session — the
+          // server-side confirmation route already did the work. Anything else
+          // is a real partial failure and must be surfaced, not swallowed.
+          if (!response.ok && response.status !== 401) {
+            setSetupIncomplete(true)
           }
         } catch (err) {
-          console.error('Client creation error:', err)
+          console.error('Account setup error:', err)
+          setSetupIncomplete(true)
         }
         return
       }
@@ -149,6 +163,24 @@ function ConfirmationContent() {
         </motion.div>
         <h1 className="text-3xl font-bold text-[var(--text-primary)]">{title}</h1>
         <p className="mt-3 text-lg text-[var(--text-secondary)]">{message}</p>
+
+        {/* A partial provisioning failure is stated plainly. The old code
+            logged it and showed an unqualified success. */}
+        {setupIncomplete && (
+          <div
+            role="alert"
+            className="mt-6 rounded-xl border border-[var(--warning)] bg-[var(--warning-subtle)] p-4 text-left"
+          >
+            <p className="text-sm font-semibold text-[var(--text-primary)]">
+              Your account setup did not finish
+            </p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">
+              Your email is confirmed and you can log in, but part of your account
+              record was not created. Please contact support so we can complete it.
+            </p>
+          </div>
+        )}
+
         <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
           <Link
             href="/client-login"

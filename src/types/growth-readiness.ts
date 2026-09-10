@@ -115,9 +115,12 @@ export interface FormData {
   main_obstacle: string
   
   // Step 7: Growth Readiness
+  // `uploaded_file` was removed: the assessment submits as JSON, which cannot
+  // carry a File, so the value never left the browser. The database column
+  // GrowthAssessment.uploaded_file_url above is untouched — it belongs to the
+  // stored row, not to this form payload.
   support_type: string
   improvement_timeline: string
-  uploaded_file: File | null
   consent: boolean
 }
 

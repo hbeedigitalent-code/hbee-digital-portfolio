@@ -31,7 +31,7 @@ export function Hero() {
               <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--accent-lime)]" />
             </span>
             <span className="text-sm font-semibold text-[var(--text-secondary)]">
-              Q3 Growth Readiness Initiative
+              Q3/Q4 Growth Support Initiative
             </span>
           </motion.div>
 
@@ -41,11 +41,10 @@ export function Hero() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-4xl md:text-5xl lg:text-6xl font-bold text-[var(--text-primary)] leading-[1.1] tracking-tight"
           >
-            Is Your Business Ready For{' '}
-            <span className="bg-gradient-to-r from-[var(--accent-orange)] to-[var(--accent-lime)] bg-clip-text text-transparent">
-              Its Next Stage
-            </span>{' '}
-            Of Growth?
+            Use September To Prepare Your Store For{' '}
+            <span className="bg-gradient-to-r from-[var(--accent-orange)] to-[var(--orange-600)] bg-clip-text text-transparent">
+              Q4
+            </span>
           </motion.h1>
 
           <motion.p
@@ -54,9 +53,11 @@ export function Hero() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="mt-6 text-lg md:text-xl text-[var(--text-secondary)] max-w-3xl mx-auto leading-relaxed"
           >
-            The Hbee Growth Readiness Assessment™ helps ecommerce brands evaluate 
-            visibility, conversion, retention, authority, and scalability before 
-            the next stage of growth.
+            September is the end of Q3 — the window to get your business ready for
+            the quarter that matters most. Complete the Hbee Growth Readiness
+            Assessment, and we will review your business, identify your priorities,
+            and recommend a growth action plan. Approved merchants receive a free
+            lifetime Growth Profile, whether or not they take on a paid project.
           </motion.p>
 
           <motion.div
@@ -82,38 +83,34 @@ export function Hero() {
             </Link>
           </motion.div>
 
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="mt-6 text-sm text-[var(--text-muted)]"
-          >
-            ⏱️ Estimated completion time: <span className="text-[var(--text-primary)] font-semibold">5–7 minutes</span>
-          </motion.p>
-
+          {/* The "Estimated completion time: 5–7 minutes" line and the "Instant
+              Score" badge were removed. No completion time has been measured, and
+              no score is shown to the merchant at any point — the assessment is
+              reviewed by Hbee before any result is issued. Only claims the
+              journey actually delivers remain. */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.5 }}
-            className="mt-8 flex flex-wrap items-center justify-center gap-6 text-sm text-[var(--text-muted)]"
+            className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-sm text-[var(--text-muted)]"
           >
             <span className="flex items-center gap-2">
-              <div className="rounded-full bg-[var(--accent-lime)]/20 p-1">
-                <SvgIcon name="check" size={14} color="var(--accent-lime)" />
+              <div className="rounded-full bg-[var(--accent-orange)]/15 p-1">
+                <SvgIcon name="check" size={14} color="var(--accent-orange)" />
               </div>
-              Free Assessment
+              Free assessment
             </span>
             <span className="flex items-center gap-2">
-              <div className="rounded-full bg-[var(--accent-lime)]/20 p-1">
-                <SvgIcon name="check" size={14} color="var(--accent-lime)" />
+              <div className="rounded-full bg-[var(--accent-orange)]/15 p-1">
+                <SvgIcon name="check" size={14} color="var(--accent-orange)" />
               </div>
-              Instant Score
+              Reviewed by Hbee Digitals
             </span>
             <span className="flex items-center gap-2">
-              <div className="rounded-full bg-[var(--accent-lime)]/20 p-1">
-                <SvgIcon name="check" size={14} color="var(--accent-lime)" />
+              <div className="rounded-full bg-[var(--accent-orange)]/15 p-1">
+                <SvgIcon name="check" size={14} color="var(--accent-orange)" />
               </div>
-              Growth Profile
+              Free lifetime Growth Profile if approved
             </span>
           </motion.div>
         </div>

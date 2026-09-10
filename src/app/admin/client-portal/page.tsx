@@ -2,7 +2,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClientComponentClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import SvgIcon from '@/components/ui/SvgIcon'
 
@@ -18,9 +17,9 @@ interface Client {
 }
 
 export default function AdminClientPortalPage() {
-  const supabase = createClientComponentClient()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 })
 
   useEffect(() => {
@@ -30,25 +29,36 @@ export default function AdminClientPortalPage() {
   async function fetchClients() {
     setLoading(true)
 
-    const { data, error } = await supabase
-      .from('clients')
-      .select(`
-        *,
-        projects (id, project_id, status)
-      `)
-      .order('created_at', { ascending: false })
+    // /api/admin/clients?view=portal verifies session, user-bound admin 2FA and
+    // active admin membership before reading clients.
+    try {
+      const response = await fetch('/api/admin/clients?view=portal', {
+        credentials: 'same-origin',
+      })
+      const payload = await response.json().catch(() => null)
 
-    if (!error && data) {
+      if (!response.ok || !Array.isArray(payload?.clients)) {
+        setLoadError(payload?.error || 'Could not load clients. Please refresh and try again.')
+        setClients([])
+        return
+      }
+
+      const data = payload.clients
+      setLoadError(null)
       setClients(data)
-      
-      const total = data.length
-      const active = data.filter((c: any) => c.status === 'Active').length
-      const inactive = data.filter((c: any) => c.status !== 'Active').length
-      
-      setStats({ total, active, inactive })
-    }
 
-    setLoading(false)
+      setStats({
+        total: data.length,
+        active: data.filter((c: any) => c.status === 'Active').length,
+        inactive: data.filter((c: any) => c.status !== 'Active').length,
+      })
+    } catch (error) {
+      console.error('Error:', error)
+      setLoadError('Could not load clients. Please refresh and try again.')
+      setClients([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const statusColors: Record<string, string> = {

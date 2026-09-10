@@ -14,6 +14,7 @@ import { Step6GrowthChallenges } from './Step6GrowthChallenges'
 import { Step7GrowthReadiness } from './Step7GrowthReadiness'
 import { useAssessmentForm } from '@/hooks/useAssessmentForm'
 import SvgIcon from '@/components/ui/SvgIcon'
+import TurnstileWidget from '@/components/ui/TurnstileWidget'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const stepComponents = {
@@ -65,7 +66,11 @@ export function AssessmentForm() {
     nextStep,
     prevStep,
     submitForm,
-    isCurrentStepComplete
+    isCurrentStepComplete,
+    turnstileToken,
+    setTurnstileToken,
+    turnstileReset,
+    resetTurnstile
   } = useAssessmentForm()
 
   // Redirect to thank you page after successful submission
@@ -133,6 +138,24 @@ export function AssessmentForm() {
         )}
       </AnimatePresence>
 
+      {/* Security check — rendered only on the final step, immediately above
+          the submit button. The server verifies the token before any database
+          write or email, so this is the visible half of a real control rather
+          than decoration. */}
+      {currentStep === 7 && (
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <TurnstileWidget
+            onVerify={setTurnstileToken}
+            onExpire={resetTurnstile}
+            onError={resetTurnstile}
+            reset={turnstileReset}
+          />
+          <p className="text-xs text-[var(--text-muted)]">
+            This quick check helps us keep automated submissions out.
+          </p>
+        </div>
+      )}
+
       {/* Navigation Buttons */}
       <div className="mt-8 flex justify-between gap-4 border-t border-[var(--border)] pt-6">
         <button
@@ -149,7 +172,7 @@ export function AssessmentForm() {
           <button
             type="button"
             onClick={submitForm}
-            disabled={isSubmitting || !isCurrentStepComplete()}
+            disabled={isSubmitting || !isCurrentStepComplete() || !turnstileToken}
             className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--accent-orange)] px-8 py-3 text-sm font-bold text-white transition-all hover:scale-[1.02] hover:shadow-lg hover:shadow-[var(--accent-orange)]/25 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting ? (

@@ -24,6 +24,10 @@ export default function ClientPortalLayout({ children }: { children: React.React
     { name: 'Dashboard', href: '/client-portal', icon: 'dashboard' },
     { name: 'Growth Profile', href: '/client-portal/growth-profile', icon: 'growth-readiness' },
     { name: 'Projects', href: '/client-portal/projects', icon: 'projects' },
+    // 'services' resolves to public/svgs/services.svg, which exists. Do not use
+    // 'document' — there is no public/svgs/document.svg and SvgIcon falls
+    // through to /svgs/{name}.svg, so it would render a broken image.
+    { name: 'Proposals', href: '/client-portal/proposals', icon: 'services' },
     { name: 'Files', href: '/client-portal/files', icon: 'file' },
     { name: 'Requests', href: '/client-portal/requests', icon: 'messages' },
     { name: 'Deliverables', href: '/client-portal/deliverables', icon: 'download' },

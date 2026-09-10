@@ -11,8 +11,9 @@ import {
   calculateHGRI,
   detectPrimaryConstraint
 } from '@/lib/scoring/hgri-scoring'
-import { FormData } from '@/types/growth-readiness'
 import { createNotification } from '@/lib/notifications/createNotification'
+import { verifyTurnstileToken, turnstileFailureMessage } from '@/lib/turnstile'
+import { validateAssessmentPayload } from '@/lib/validators/assessment-payload'
 
 // Lazy initialize Supabase client
 let supabaseAdmin: any = null
@@ -53,37 +54,46 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body: FormData = await request.json()
+    const rawBody = await request.json().catch(() => null)
+    if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
 
-    // Validate required fields
-    const requiredFields = [
-      'business_name', 'website', 'contact_name', 'email', 
-      'country', 'industry', 'business_stage', 'store_age',
-      'primary_goals', 'success_vision', 'marketing_channels',
-      'best_channel', 'paid_ads_usage', 'visibility_confidence',
-      'email_capture', 'email_automations', 'customer_reviews',
-      'content_publishing', 'upsells_crosssells', 'biggest_challenge',
-      'main_obstacle', 'support_type', 'improvement_timeline', 'consent'
-    ]
+    // ------------------------------------------------------------------
+    // 0. Turnstile — verified BEFORE any validation, database write or email.
+    //    A failed check must cost nothing: no merchant row, no assessment,
+    //    no review, no notification, no message to the supplied address.
+    // ------------------------------------------------------------------
+    const turnstileToken = (rawBody as Record<string, unknown>).turnstile_token
+    const remoteIp =
+      request.headers.get('cf-connecting-ip') ||
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      null
 
-    const missingFields = requiredFields.filter(field => {
-      const value = body[field as keyof FormData]
-      return value === undefined || value === null || value === ''
-    })
-
-    if (missingFields.length > 0) {
+    const turnstile = await verifyTurnstileToken(turnstileToken, remoteIp)
+    if (!turnstile.ok) {
       return NextResponse.json(
-        { error: `Missing required fields: ${missingFields.join(', ')}` },
-        { status: 400 }
+        {
+          error: turnstileFailureMessage(turnstile.reason),
+          // Lets the browser reset the widget for a retryable failure without
+          // exposing Cloudflare's error vocabulary.
+          retryable: turnstile.reason === 'expired' || turnstile.reason === 'unreachable',
+        },
+        { status: turnstile.reason === 'not-configured' ? 500 : 400 },
       )
     }
 
-    if (!body.consent) {
-      return NextResponse.json(
-        { error: 'Consent is required' },
-        { status: 400 }
-      )
+    // ------------------------------------------------------------------
+    // 1. Strict field validation against an explicit allow-list.
+    //    `body` is rebuilt from known keys only — the raw request object is
+    //    never spread into a database row, and turnstile_token cannot reach
+    //    storage because it is not a field name below.
+    // ------------------------------------------------------------------
+    const validation = validateAssessmentPayload(rawBody as Record<string, unknown>)
+    if (!validation.ok) {
+      return NextResponse.json({ error: validation.error }, { status: 400 })
     }
+    const body = validation.value
 
     // Prepare scoring input
     const scoringInput = {
@@ -194,6 +204,10 @@ export async function POST(request: NextRequest) {
         classification: classification,
         primary_constraint: primaryConstraint,
         recommended_focus: recommendedFocus,
+        // The VALIDATED payload, never the raw request object. `body` is
+        // rebuilt by validateAssessmentPayload from an explicit allow-list, so
+        // the Turnstile token and any unrecognised field the caller invented
+        // cannot be persisted here.
         raw_answers_json: body,
         status: 'New Submission',
         review_status: 'pending'
@@ -277,21 +291,22 @@ export async function POST(request: NextRequest) {
       message: `${body.business_name} has submitted a growth assessment.`,
       entityType: 'assessment',
       entityId: assessment.id,
-      link: `/admin/growth-reviews/${review?.id || assessment.id}`,
+      // The review row is created in step 4 and is not fatal if it fails. When
+      // it does fail there is no review to open, so the link must point at the
+      // assessment's own admin destination rather than putting an assessment id
+      // under /admin/growth-reviews/, where it would resolve to nothing.
+      link: review?.id
+        ? `/admin/growth-reviews/${review.id}`
+        : `/admin/growth-assessments/${assessment.id}`,
     })
 
-    // 8. Send review started email to merchant
-    try {
-      const { sendReviewStartedEmail } = await import('@/lib/emails/hos/review-started')
-      await sendReviewStartedEmail({
-        firstName: body.contact_name.split(' ')[0] || body.contact_name,
-        email: body.email,
-        portalUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.hbeedigitals.com'}/client-portal`
-      })
-      console.log('✅ Review started email sent to:', body.email)
-    } catch (emailError) {
-      console.error('Review started email error:', emailError)
-    }
+    // The "review started" email that used to be sent here has been removed.
+    // It fired in the same request as the "assessment received" email above —
+    // two messages to the same address milliseconds apart, pointing at
+    // different destinations (/client-signup and /client-portal). Only the
+    // received confirmation is sent at submission. A review-started message
+    // needs a real trigger at the point the review actually begins; none is
+    // invented here.
 
     return NextResponse.json({
       success: true,

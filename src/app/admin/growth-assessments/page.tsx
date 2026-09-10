@@ -4,16 +4,15 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { createClientComponentClient } from '@/lib/supabase-client'
 import { MerchantLifecycleService } from '@/lib/services/merchant-lifecycle'
 import StatusBadge from '@/components/ui/StatusBadge'
 import SvgIcon from '@/components/ui/SvgIcon'
 import Button from '@/components/ui/Button'
 
 export default function AdminGrowthReviewsPage() {
-  const supabase = createClientComponentClient()
   const [reviews, setReviews] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
 
@@ -24,29 +23,24 @@ export default function AdminGrowthReviewsPage() {
   async function fetchReviews() {
     setLoading(true)
     try {
-      let query = supabase
-        .from('growth_reviews')
-        .select(`
-          *,
-          merchant:merchants(*),
-          assessment:growth_assessments(*)
-        `)
-        .order('created_at', { ascending: false })
+      const response = await fetch(
+        `/api/admin/growth-reviews?status=${encodeURIComponent(filter)}`,
+        { credentials: 'same-origin' },
+      )
+      const payload = await response.json().catch(() => null)
 
-      if (filter !== 'all') {
-        query = query.eq('status', filter)
-      }
-
-      const { data, error } = await query
-
-      if (error) {
-        console.error('Error fetching reviews:', error)
+      if (!response.ok || !Array.isArray(payload?.reviews)) {
+        setLoadError(payload?.error || 'Could not load assessments. Please refresh and try again.')
+        setReviews([])
         return
       }
 
-      setReviews(data || [])
+      setLoadError(null)
+      setReviews(payload.reviews)
     } catch (error) {
       console.error('Error:', error)
+      setLoadError('Could not load assessments. Please refresh and try again.')
+      setReviews([])
     } finally {
       setLoading(false)
     }
@@ -66,6 +60,19 @@ export default function AdminGrowthReviewsPage() {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center text-center">
+        <SvgIcon name="warning" size={48} color="var(--error)" />
+        <h2 className="mt-4 text-xl font-semibold text-[var(--text-primary)]">
+          Could not load assessments
+        </h2>
+        <p className="mt-2 max-w-md text-[var(--text-secondary)]">{loadError}</p>
+        <Button className="mt-6" onClick={fetchReviews}>Try Again</Button>
       </div>
     )
   }

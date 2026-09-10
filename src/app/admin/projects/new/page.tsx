@@ -76,19 +76,22 @@ export default function AdminNewProjectPage() {
     setLoading(true)
     setClientsError(null)
     try {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('id, full_name, business_name, email')
-        .order('business_name', { ascending: true })
+      // /api/admin/clients verifies session, user-bound admin 2FA and active
+      // admin membership. `clients` keeps only an own-row SELECT policy after
+      // the lockdown, so an admin listing other people's client records must
+      // come through the server.
+      const response = await fetch('/api/admin/clients?view=options', {
+        credentials: 'same-origin',
+      })
+      const payload = await response.json().catch(() => null)
 
-      if (error) {
-        console.error('Error fetching clients:', error)
-        setClientsError('Failed to load clients. Please refresh and try again.')
+      if (!response.ok || !Array.isArray(payload?.clients)) {
+        setClientsError(payload?.error || 'Failed to load clients. Please refresh and try again.')
         setClients([])
         return []
       }
 
-      const list = (data || []) as ClientOption[]
+      const list = payload.clients as ClientOption[]
       setClients(list)
       return list
     } catch (error) {

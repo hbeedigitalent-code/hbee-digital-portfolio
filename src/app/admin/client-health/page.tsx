@@ -26,6 +26,7 @@ export default function AdminClientHealthPage() {
   const supabase = createClientComponentClient()
   const [clients, setClients] = useState<ClientHealth[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [riskFilter, setRiskFilter] = useState('all')
   const [stats, setStats] = useState({ low: 0, medium: 0, high: 0 })
 
@@ -36,21 +37,21 @@ export default function AdminClientHealthPage() {
   async function fetchClientHealth() {
     setLoading(true)
 
-    const { data: clientData } = await supabase
-      .from('clients')
-      .select(`
-        id,
-        full_name,
-        business_name,
-        email,
-        projects (
-          id,
-          project_id,
-          project_name,
-          status,
-          progress
-        )
-      `)
+    // /api/admin/clients?view=health verifies session, user-bound admin 2FA
+    // and active admin membership before reading clients.
+    const response = await fetch('/api/admin/clients?view=health', {
+      credentials: 'same-origin',
+    })
+    const payload = await response.json().catch(() => null)
+
+    if (!response.ok || !Array.isArray(payload?.clients)) {
+      setLoadError(payload?.error || 'Could not load client health. Please refresh and try again.')
+      setLoading(false)
+      return
+    }
+
+    setLoadError(null)
+    const clientData = payload.clients
 
     if (clientData) {
       const healthData: ClientHealth[] = []

@@ -23,6 +23,7 @@ export default function AdminWorkspacePage() {
   const supabase = createClientComponentClient()
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [recentTasks, setRecentTasks] = useState<any[]>([])
   const [upcomingDeadlines, setUpcomingDeadlines] = useState<any[]>([])
 
@@ -33,10 +34,24 @@ export default function AdminWorkspacePage() {
   async function fetchDashboardData() {
     setLoading(true)
 
+    // growth_assessments moves behind server-side authorization; the other
+    // tiles below keep their existing queries.
+    const statsResponse = await fetch('/api/admin/dashboard-stats', {
+      credentials: 'same-origin',
+    })
+    const adminStats = await statsResponse.json().catch(() => null)
+
+    if (!statsResponse.ok || !adminStats) {
+      setLoadError(adminStats?.error || 'Could not load workspace statistics. Please refresh and try again.')
+      setLoading(false)
+      return
+    }
+
+    setLoadError(null)
+
     const [
       projectsRes,
       leadsRes,
-      assessmentsRes,
       onboardingRes,
       tasksRes,
       requestsRes,
@@ -44,7 +59,6 @@ export default function AdminWorkspacePage() {
     ] = await Promise.all([
       supabase.from('projects').select('status', { count: 'exact' }),
       supabase.from('leads').select('status', { count: 'exact' }).eq('status', 'New Lead'),
-      supabase.from('growth_assessments').select('status', { count: 'exact' }).eq('status', 'New Submission'),
       supabase.from('client_onboarding_submissions').select('status', { count: 'exact' }).eq('status', 'New Submission'),
       supabase.from('tasks').select('status, due_date').eq('status', 'Pending'),
       supabase.from('project_requests').select('status').eq('status', 'open'),
@@ -53,7 +67,7 @@ export default function AdminWorkspacePage() {
 
     const activeProjects = projectsRes.data?.filter(p => p.status !== 'Completed' && p.status !== 'Archived').length || 0
     const newLeads = leadsRes.count || 0
-    const pendingAssessments = assessmentsRes.count || 0
+    const pendingAssessments = adminStats.pendingAssessments
     const pendingOnboarding = onboardingRes.count || 0
     
     const today = new Date()

@@ -5,41 +5,39 @@
 import SvgIcon from '@/components/ui/SvgIcon'
 import { motion } from 'framer-motion'
 
+// What an APPROVED merchant actually receives. Every item here is either
+// already delivered or explicitly labelled as in development below — nothing
+// on this list is aspirational.
 const benefits = [
   {
-    icon: 'hgri-score',
-    title: 'HGRI™ Score',
-    description: 'Your personalized Growth Readiness Index based on our proprietary scoring system.'
-  },
-  {
-    icon: 'growth-classification',
-    title: 'Growth Classification',
-    description: 'Foundation, Growth Potential, Growth Ready, or Scale Ready classification.'
-  },
-  {
     icon: 'growth-profile',
-    title: 'Growth Profile',
-    description: 'Tailored assessment summary with actionable insights for your business.'
-  },
-  {
-    icon: 'visibility-review',
-    title: 'Visibility Review',
-    description: 'Analysis of your current visibility and recommendations for improvement.'
-  },
-  {
-    icon: 'conversion-insights',
-    title: 'Conversion Insights',
-    description: 'Conversion optimization opportunities specific to your business model.'
+    title: 'Your Growth Profile',
+    description: 'Free for life once approved, whether or not you take on a paid project. Your assessment results and business overview live here.'
   },
   {
     icon: 'growth-recommendations',
-    title: 'Growth Recommendations',
-    description: 'Actionable next steps to accelerate your growth trajectory.'
+    title: 'Hbee-Reviewed Findings',
+    description: 'We review your business and set out the findings, your priorities, and a recommended growth action plan.'
   },
   {
-    icon: 'opportunity-review',
-    title: 'Opportunity Review',
-    description: 'Consideration for additional growth support and strategic partnership.'
+    icon: 'analytics',
+    title: 'Implementation Tracking',
+    description: 'A record of what has been implemented and how your business has improved over time.'
+  },
+  {
+    icon: 'growth-readiness',
+    title: 'Quarterly Personalised Reviews',
+    description: 'Free ongoing support: a personalised performance review each quarter, with fresh recommendations and progress tracking.'
+  },
+  {
+    icon: 'edit',
+    title: 'Profile Updates',
+    description: 'Your profile is updated after a reassessment or a completed project, so it always reflects where the business actually is.'
+  },
+  {
+    icon: 'notification',
+    title: 'Program Updates',
+    description: 'Updates about the initiative delivered to your profile.'
   }
 ]
 
@@ -100,6 +98,63 @@ export function WhatYouReceive() {
             </motion.div>
           ))}
         </div>
+
+        {/* Free vs paid, stated plainly rather than left to inference. */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="mt-8 grid gap-4 md:grid-cols-2"
+        >
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--accent-orange)]">
+              Free
+            </h3>
+            <p className="mt-3 text-sm text-[var(--text-secondary)]">
+              Your Growth Profile, our reviewed findings and priorities, your
+              recommended action plan, progress tracking, and quarterly personalised
+              performance reviews. These stay free for life once you are approved,
+              even if you never take on a paid project.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+              Paid
+            </h3>
+            <p className="mt-3 text-sm text-[var(--text-secondary)]">
+              Implementation — the work of actually building and changing things —
+              is paid. Qualified merchants receive 25% coverage of Hbee Digitals&apos;
+              implementation fees and pay the remaining 75%. See the terms below.
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Explicitly future-tense, so nothing unbuilt reads as an available
+            benefit. */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="mt-4 rounded-2xl border border-dashed border-[var(--border)] bg-[var(--bg-card)] p-6"
+        >
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex-shrink-0">
+              <SvgIcon name="clock" size={18} color="var(--text-muted)" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                In development — not available today
+              </h3>
+              <p className="mt-1.5 text-sm text-[var(--text-muted)]">
+                Connected live store metrics and loyalty features are being built.
+                They are not part of what you receive today, and nothing in the
+                initiative depends on them.
+              </p>
+            </div>
+          </div>
+        </motion.div>
       </div>
     </section>
   )

@@ -28,7 +28,7 @@ export function WhyWeCreated() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="section-heading"
           >
-            Empowering Ecommerce Brands To Grow Smarter
+            Getting Ready For Q4 Starts In September
           </motion.h2>
           
           <motion.div
@@ -39,19 +39,23 @@ export function WhyWeCreated() {
             className="space-y-4 text-lg text-[var(--text-secondary)]"
           >
             <p>
-              After working with hundreds of ecommerce brands, we noticed a pattern. 
-              Most business owners know they want to grow, but they don't know where 
-              to start or what's holding them back.
+              Most store owners know they want to grow. Far fewer know which part of
+              the business is actually holding them back — and Q4 is the wrong time
+              to find out.
             </p>
             <p>
-              The <span className="font-semibold text-[var(--text-primary)]">Hbee Growth Readiness Assessment™</span> was 
-              created to solve this problem. It provides a clear, data-driven view of 
-              your business's growth potential across five critical dimensions.
+              The <span className="font-semibold text-[var(--text-primary)]">Q3/Q4 Growth Support Initiative</span> exists
+              to use September differently. You complete the Hbee Growth Readiness
+              Assessment, we review your business against it, and you get a clear
+              picture of your priorities and a recommended growth action plan before
+              the busiest quarter of the year.
             </p>
             <p>
-              Whether you're a founder looking to scale, a marketing leader planning 
-              your next campaign, or a business owner ready for the next stage of growth, 
-              this assessment will give you the clarity and direction you need.
+              Approved merchants keep a{' '}
+              <span className="font-semibold text-[var(--text-primary)]">free lifetime Growth Profile</span>, whether or
+              not they go ahead with a paid project. Recommendations, progress
+              tracking and quarterly personalised reviews stay free. Only
+              implementation is paid.
             </p>
           </motion.div>
 
@@ -62,30 +66,30 @@ export function WhyWeCreated() {
             transition={{ duration: 0.5, delay: 0.3 }}
             className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-6 shadow-[var(--shadow-md)]"
           >
-            <div className="flex flex-wrap items-center gap-4 text-sm text-[var(--text-secondary)]">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-3 text-sm text-[var(--text-secondary)]">
               <span className="flex items-center gap-2">
-                <div className="rounded-full bg-[var(--accent-lime)]/20 p-1">
-                  <SvgIcon name="check" size={14} color="var(--accent-lime)" />
+                <div className="rounded-full bg-[var(--accent-orange)]/15 p-1">
+                  <SvgIcon name="check" size={14} color="var(--accent-orange)" />
                 </div>
-                Data-driven insights
+                Hbee-reviewed findings
               </span>
               <span className="flex items-center gap-2">
-                <div className="rounded-full bg-[var(--accent-orange)]/20 p-1">
+                <div className="rounded-full bg-[var(--accent-orange)]/15 p-1">
                   <SvgIcon name="check" size={14} color="var(--accent-orange)" />
                 </div>
                 5 growth pillars
               </span>
               <span className="flex items-center gap-2">
-                <div className="rounded-full bg-[var(--accent-lime)]/20 p-1">
-                  <SvgIcon name="check" size={14} color="var(--accent-lime)" />
-                </div>
-                Actionable recommendations
-              </span>
-              <span className="flex items-center gap-2">
-                <div className="rounded-full bg-[var(--accent-orange)]/20 p-1">
+                <div className="rounded-full bg-[var(--accent-orange)]/15 p-1">
                   <SvgIcon name="check" size={14} color="var(--accent-orange)" />
                 </div>
-                100-point scoring system
+                Prioritised action plan
+              </span>
+              <span className="flex items-center gap-2">
+                <div className="rounded-full bg-[var(--accent-orange)]/15 p-1">
+                  <SvgIcon name="check" size={14} color="var(--accent-orange)" />
+                </div>
+                Free quarterly reviews
               </span>
             </div>
           </motion.div>

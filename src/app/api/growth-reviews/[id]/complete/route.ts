@@ -1,38 +1,167 @@
 // src/app/api/growth-reviews/[id]/complete/route.ts
+//
+// POST — complete a growth review and generate the merchant's Growth Profile.
+// ACTIVE ADMINS ONLY.
+//
+// Before this change the route had no authentication of any kind, and it took
+// `merchant_id` and `assessment_id` straight from the request body. Any
+// anonymous caller could therefore fabricate a Growth Profile with arbitrary
+// scores, mark any assessment reviewed, and overwrite an existing merchant's
+// profile — choosing which records to write via the body.
+//
+// Two things changed. Authorization now runs first, and the merchant/assessment
+// relationships are DERIVED FROM THE STORED growth_reviews ROW addressed by the
+// route parameter. Caller-supplied ids are no longer trusted: if they are sent
+// at all they must match the stored row, and a mismatch is rejected before any
+// write.
+//
+// Not covered by middleware.ts (its matcher is /admin/:path*,
+// /admin-2fa-challenge and /client-portal/:path*, not /api/*), so session, 2FA
+// and active-admin are verified here independently.
+//
+// DATA ACCESS NOW USES A SERVER-ONLY PRIVILEGED CLIENT.
+//
+// The previous version ran every read and write on an anonymous client, which
+// only worked because growth_reviews / growth_profiles / merchant_status had
+// RLS disabled with broad anon grants. Those grants are being removed. Because
+// this endpoint is now provably admin-only — session, user-bound 2FA and active
+// admin_users membership are all verified above any data access — the privileged
+// client is the correct role here, and it keeps the route working after the
+// lockdown SQL is applied.
+//
+// This is NOT a generic privileged API: the review is addressed by the route
+// parameter, every relationship is read back from the stored row, and no table
+// name, filter or column list comes from the request.
 
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { ADMIN_2FA_COOKIE_NAME, verifyAdmin2FACookie } from '@/lib/admin-2fa-cookie'
 import {
   createNotification,
   resolveClientIdByMerchantId,
 } from '@/lib/notifications/createNotification'
 
-// Use environment variables safely
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-// Use the anon key instead of service role key to avoid build issues
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// Only create the client if we have the required keys
-const supabase = (supabaseUrl && supabaseKey) 
-  ? createClient(supabaseUrl, supabaseKey)
-  : null
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Lazy, non-throwing privileged client. Built once and used for BOTH the
+// admin_users membership lookup and this route's own review/assessment/profile
+// operations — see the header note. Deliberately NOT the shared
+// src/lib/supabaseAdmin.ts singleton, which throws at import time when
+// SUPABASE_SERVICE_ROLE_KEY is missing.
+let privilegedClient: any = null
+
+function getPrivilegedClient() {
+  if (privilegedClient) return privilegedClient
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!supabaseUrl || !serviceKey) return null
+
+  privilegedClient = createClient(supabaseUrl, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+
+  return privilegedClient
+}
+
+type AuthResult = { ok: true } | { ok: false; response: NextResponse }
+
+/**
+ * Session + user-bound 2FA attestation + active admin_users membership.
+ * Fails closed at every step, including when the membership lookup itself
+ * errors — a lookup that cannot answer "yes" is never read as "yes".
+ */
+async function requireActiveAdmin(): Promise<AuthResult> {
+  const sessionClient = createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await sessionClient.auth.getUser()
+
+  if (!user) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }),
+    }
+  }
+
+  // Checked BEFORE any admin_users query, returning the SAME generic 401 as a
+  // missing session. verifyAdmin2FACookie fails closed on a missing secret.
+  const cookieValue = cookies().get(ADMIN_2FA_COOKIE_NAME)?.value
+  const twoFAVerified = await verifyAdmin2FACookie(cookieValue, user.id)
+  if (!twoFAVerified) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }),
+    }
+  }
+
+  const adminClient = getPrivilegedClient()
+  if (!adminClient) {
+    console.error('[growth-reviews/complete] privileged client unavailable — denied')
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Server configuration error' }, { status: 500 }),
+    }
+  }
+
+  const { data: adminRow, error: adminLookupError } = await adminClient
+    .from('admin_users')
+    .select('user_id')
+    .eq('user_id', user.id)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (adminLookupError) {
+    console.error(
+      `[growth-reviews/complete] admin membership lookup failed (code=${
+        (adminLookupError as { code?: string }).code ?? 'n/a'
+      }) — denied`,
+    )
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Not authorized' }, { status: 403 }),
+    }
+  }
+
+  if (!adminRow) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Not authorized' }, { status: 403 }),
+    }
+  }
+
+  return { ok: true }
+}
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  // If Supabase client is not initialized, return error
-  if (!supabase) {
-    console.error('Supabase client not initialized')
-    return NextResponse.json(
-      { error: 'Server configuration error' },
-      { status: 500 }
-    )
-  }
-
   try {
-    const body = await request.json()
+    // AUTHORIZATION FIRST — before the body is parsed, before the review is
+    // loaded, and before any write. This also builds (and validates) the
+    // privileged client that every operation below uses.
+    const auth = await requireActiveAdmin()
+    if (!auth.ok) return auth.response
+
+    const supabase = getPrivilegedClient()
+    if (!supabase) {
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    }
+
     const { id } = params
+    if (!UUID_RE.test(typeof id === 'string' ? id.trim() : '')) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
+    // Malformed JSON must not surface as an unhandled 500.
+    const body = await request.json().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
 
     const {
       review_notes,
@@ -45,15 +174,62 @@ export async function POST(
       retention_score,
       authority_score,
       scalability_score,
-      merchant_id,
-      assessment_id
     } = body
 
-    // Validate required fields
+    // RELATIONSHIPS COME FROM THE STORED ROW, NOT THE CALLER.
+    // The route parameter identifies the review; merchant_id and assessment_id
+    // are read from it. This read runs on the same anonymous client as every
+    // other data operation here, so the data-access role is unchanged.
+    const { data: reviewRow, error: reviewLoadError } = await supabase
+      .from('growth_reviews')
+      .select('id, merchant_id, assessment_id, status')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (reviewLoadError) {
+      console.error(
+        `[growth-reviews/complete] review load failed (code=${
+          (reviewLoadError as { code?: string }).code ?? 'n/a'
+        })`,
+      )
+      return NextResponse.json({ error: 'Failed to load review' }, { status: 500 })
+    }
+
+    if (!reviewRow) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
+    const merchant_id: string | null = reviewRow.merchant_id ?? null
+    const assessment_id: string | null = reviewRow.assessment_id ?? null
+
     if (!merchant_id || !assessment_id) {
+      // A review with no stored relationships cannot be completed safely; the
+      // route will not invent them from the request.
+      console.error(
+        `[growth-reviews/complete] review ${id} has no stored merchant_id/assessment_id`,
+      )
       return NextResponse.json(
-        { error: 'Missing merchant_id or assessment_id' },
-        { status: 400 }
+        { error: 'This review is not linked to a merchant and assessment.' },
+        { status: 409 },
+      )
+    }
+
+    // The admin UI still sends these for backwards compatibility. They are not
+    // used for any write — they are only checked against the stored row, and a
+    // mismatch is rejected before anything is written.
+    const claimedMerchantId = (body as { merchant_id?: unknown }).merchant_id
+    const claimedAssessmentId = (body as { assessment_id?: unknown }).assessment_id
+
+    if (
+      (typeof claimedMerchantId === 'string' && claimedMerchantId !== merchant_id) ||
+      (typeof claimedAssessmentId === 'string' && claimedAssessmentId !== assessment_id)
+    ) {
+      console.error(
+        `[growth-reviews/complete] relationship mismatch for review ${id} — rejected`,
+      )
+      return NextResponse.json(
+        { error: 'Review relationship mismatch' },
+        { status: 409 },
       )
     }
 
@@ -148,7 +324,7 @@ export async function POST(
     if (profileError) {
       console.error('Profile creation error:', profileError)
       return NextResponse.json(
-        { error: 'Failed to create growth profile: ' + profileError.message },
+        { error: 'Failed to create growth profile' },
         { status: 500 }
       )
     }
@@ -205,7 +381,7 @@ export async function POST(
   } catch (error) {
     console.error('Complete review error:', error)
     return NextResponse.json(
-      { error: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error') },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

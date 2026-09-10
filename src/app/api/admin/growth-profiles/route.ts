@@ -26,77 +26,98 @@
 // ignored.
 
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { ADMIN_2FA_COOKIE_NAME, verifyAdmin2FACookie } from '@/lib/admin-2fa-cookie'
 import {
   createNotification,
   resolveClientIdByMerchantId,
 } from '@/lib/notifications/createNotification'
+import { requireActiveAdmin, queryFailure, ADMIN_UUID_RE } from '@/lib/admin-api-auth'
 
-// Lazy, non-throwing service-role client — the same defensive pattern used by
-// the other /api/admin routes. Deliberately NOT the shared
-// src/lib/supabaseAdmin.ts singleton, which throws at import time when
-// SUPABASE_SERVICE_ROLE_KEY is missing.
-let serviceRoleClient: any = null
+// Session, user-bound 2FA, the privileged client and active-admin membership
+// all come from requireActiveAdmin() now, so this module no longer builds its
+// own service-role client or repeats the cookie check.
+const UUID_RE = ADMIN_UUID_RE
 
-function getServiceRoleClient() {
-  if (serviceRoleClient) return serviceRoleClient
+const MAX_TITLE = 200
+const MAX_SUMMARY = 4000
+const MAX_CLASSIFICATION = 120
+const MAX_PROFILE_DATA_BYTES = 100_000
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !serviceKey) return null
-
-  const { createClient } = require('@supabase/supabase-js')
-  serviceRoleClient = createClient(supabaseUrl, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-
-  return serviceRoleClient
+/**
+ * Absolute http(s) URLs only. Anything else — including javascript:, data:,
+ * a relative path or a non-string — becomes null, so a stored value can never
+ * be rendered as a hostile href.
+ */
+function safeUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null
+  try {
+    const url = new URL(value.trim())
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null
+  } catch {
+    return null
+  }
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Explicit column list for the list view. Kept narrow rather than `*` so a
+// column added to growth_profiles later is not published by accident.
+const PROFILE_LIST_COLUMNS = `
+  id, title, summary, hgri_score, growth_classification, is_active, created_at,
+  merchant_id, assessment_id,
+  merchant:merchants(id, business_name, contact_name, email, industry, country),
+  assessment:growth_assessments(id, created_at, hgri_score, classification)
+`
+
+/**
+ * GET — the growth profile list.
+ *
+ * Added in the admin access conversion batch. Replaces the direct browser query
+ * in src/app/admin/growth-profiles/page.tsx, which read growth_profiles (with
+ * merchants and growth_assessments embedded) as the caller's `authenticated`
+ * role — outside the admin 2FA cookie check, which only this server can verify.
+ *
+ * The POST handler below is unchanged.
+ */
+export async function GET(request: Request) {
+  try {
+    const auth = await requireActiveAdmin()
+    if (!auth.ok) return auth.response
+    const { db } = auth
+
+    const filter = new URL(request.url).searchParams.get('filter') || 'all'
+    if (!['all', 'active', 'archived'].includes(filter)) {
+      return NextResponse.json({ error: 'Unsupported filter' }, { status: 400 })
+    }
+
+    let query = db
+      .from('growth_profiles')
+      .select(PROFILE_LIST_COLUMNS)
+      .order('created_at', { ascending: false })
+      .limit(500)
+
+    if (filter === 'active') query = query.eq('is_active', true)
+    if (filter === 'archived') query = query.eq('is_active', false)
+
+    const { data, error } = await query
+    if (error) return queryFailure('growth profile list', error)
+
+    return NextResponse.json({ profiles: data || [] })
+  } catch (error) {
+    console.error('[admin-api] growth profile list error:', error)
+    return NextResponse.json({ error: 'Failed to load data' }, { status: 500 })
+  }
+}
 
 export async function POST(request: Request) {
   try {
-    // 1. Derive the caller from THEIR OWN session — never a client-supplied
-    //    id/email/role/isAdmin flag of any kind.
-    const sessionClient = createServerSupabaseClient()
-    const {
-      data: { user },
-    } = await sessionClient.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
-
-    // 2. Verify the signed 2FA attestation cookie — the same function
-    //    middleware uses, checked BEFORE any admin_users / service-role query.
-    //    A missing, invalid or mismatched cookie gets the same generic 401.
-    const cookieValue = cookies().get(ADMIN_2FA_COOKIE_NAME)?.value
-    const twoFAVerified = await verifyAdmin2FACookie(cookieValue, user.id)
-    if (!twoFAVerified) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
-
-    const adminClient = getServiceRoleClient()
-    if (!adminClient) {
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
-    }
-
-    // 3. Active-admin status, verified server-side via the service-role
-    //    client — never trusted from the browser.
-    const { data: adminRow } = await adminClient
-      .from('admin_users')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    if (!adminRow) {
-      return NextResponse.json({ error: 'Not authorized as admin' }, { status: 403 })
-    }
+    // 1-3. Session -> 401, user-bound 2FA -> 401 (before any admin_users
+    //      query), privileged client -> 500, active admin_users row -> 403.
+    //      This used to be duplicated inline here; it now runs through the one
+    //      shared implementation so the ordering cannot drift from the other
+    //      admin routes. The shared gate also denies (403) when the membership
+    //      lookup itself errors, which the inline copy left implicit.
+    const auth = await requireActiveAdmin()
+    if (!auth.ok) return auth.response
+    const adminClient = auth.db
+    const user = { id: auth.userId }
 
     // 4. Validate the payload.
     const body = await request.json().catch(() => null)
@@ -111,19 +132,49 @@ export async function POST(request: Request) {
     if (!UUID_RE.test(assessmentId)) {
       return NextResponse.json({ error: 'A valid assessment is required' }, { status: 400 })
     }
-    if (!title) {
+    if (!title || title.length > MAX_TITLE) {
       return NextResponse.json({ error: 'A profile title is required' }, { status: 400 })
     }
 
+    // HGRI is a 0-100 whole number everywhere else in the app. Number.isFinite
+    // alone accepted -1e9, 4.7 and 10000 into a column the admin and client UI
+    // both render as a percentage.
     const hgriScore = Number(body.hgri_score)
-    if (!Number.isFinite(hgriScore)) {
+    if (!Number.isInteger(hgriScore) || hgriScore < 0 || hgriScore > 100) {
       return NextResponse.json({ error: 'A valid HGRI score is required' }, { status: 400 })
     }
 
+    // Bounded, matching the cap PATCH /api/admin/growth-reviews/[id] applies to
+    // the same column.
     const classification =
       typeof body.growth_classification === 'string' && body.growth_classification.trim()
-        ? body.growth_classification.trim()
+        ? body.growth_classification.trim().slice(0, MAX_CLASSIFICATION)
         : 'Growth Potential'
+
+    const summary =
+      typeof body.summary === 'string' ? body.summary.slice(0, MAX_SUMMARY) : ''
+
+    // profile_data is stored as a blob and later read back by the client-portal
+    // route, which re-sanitises it. Still refuse a non-object or an oversized
+    // document rather than storing whatever arrives.
+    const rawProfileData = body.profile_data ?? {}
+    if (
+      typeof rawProfileData !== 'object' ||
+      rawProfileData === null ||
+      Array.isArray(rawProfileData)
+    ) {
+      return NextResponse.json({ error: 'Invalid profile data' }, { status: 400 })
+    }
+    if (JSON.stringify(rawProfileData).length > MAX_PROFILE_DATA_BYTES) {
+      return NextResponse.json({ error: 'Profile data is too large' }, { status: 400 })
+    }
+
+    // pdf_url is rendered as a link. Accept only absolute http(s) URLs, so a
+    // stored javascript: or data: value can never reach an href.
+    const pdfUrl = safeUrl(body.pdf_url)
+    if (body.pdf_url != null && body.pdf_url !== '' && pdfUrl === null) {
+      return NextResponse.json({ error: 'Invalid PDF URL' }, { status: 400 })
+    }
 
     // 5. Load the assessment with the trusted client. merchant_id is read from
     //    the stored row — a browser-supplied merchant_id is never honoured.
@@ -150,11 +201,11 @@ export async function POST(request: Request) {
         merchant_id: merchantId,
         assessment_id: assessmentId,
         title,
-        summary: typeof body.summary === 'string' ? body.summary : '',
+        summary,
         hgri_score: hgriScore,
         growth_classification: classification,
-        profile_data: body.profile_data ?? {},
-        pdf_url: body.pdf_url || null,
+        profile_data: rawProfileData,
+        pdf_url: pdfUrl,
         is_active: true,
         created_by: user.id,
       })

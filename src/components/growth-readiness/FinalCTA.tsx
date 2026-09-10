@@ -33,7 +33,7 @@ export function FinalCTA() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="section-heading"
           >
-            Take The Assessment Today
+            Start Your Assessment Before September Ends
           </motion.h2>
           
           <motion.p
@@ -43,7 +43,8 @@ export function FinalCTA() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="section-description mx-auto"
           >
-            Join hundreds of ecommerce brands that have discovered their growth potential
+            Complete the assessment and we will review your business, identify your
+            priorities, and recommend a growth action plan.
           </motion.p>
           
           <motion.div

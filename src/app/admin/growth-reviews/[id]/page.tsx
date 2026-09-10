@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClientComponentClient } from '@/lib/supabase-client'
 import StatusBadge from '@/components/ui/StatusBadge'
 import SvgIcon from '@/components/ui/SvgIcon'
 import Button from '@/components/ui/Button'
@@ -16,8 +15,8 @@ interface PageProps {
 
 export default function AdminGrowthReviewDetailPage({ params }: PageProps) {
   const router = useRouter()
-  const supabase = createClientComponentClient()
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [review, setReview] = useState<any>(null)
   const [assessment, setAssessment] = useState<any>(null)
@@ -44,21 +43,22 @@ export default function AdminGrowthReviewDetailPage({ params }: PageProps) {
   async function fetchReview() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('growth_reviews')
-        .select(`
-          *,
-          merchant:merchants(*),
-          assessment:growth_assessments(*)
-        `)
-        .eq('id', params.id)
-        .single()
+      // /api/admin/growth-reviews/[id] verifies session, user-bound admin 2FA
+      // and active admin membership before reading growth_reviews.
+      const response = await fetch(`/api/admin/growth-reviews/${params.id}`, {
+        credentials: 'same-origin',
+      })
+      const payload = await response.json().catch(() => null)
 
-      if (error) {
-        console.error('Error fetching review:', error)
+      if (!response.ok || !payload?.review) {
+        // Surfaced explicitly — an authorization or database failure must not
+        // render as an empty review form.
+        setLoadError(payload?.error || 'Could not load this review. Please refresh and try again.')
         return
       }
 
+      const data = payload.review
+      setLoadError(null)
       setReview(data)
       setMerchant(data.merchant)
       setAssessment(data.assessment)
@@ -80,6 +80,7 @@ export default function AdminGrowthReviewDetailPage({ params }: PageProps) {
       }
     } catch (error) {
       console.error('Error:', error)
+      setLoadError('Could not load this review. Please refresh and try again.')
     } finally {
       setLoading(false)
     }
@@ -88,9 +89,14 @@ export default function AdminGrowthReviewDetailPage({ params }: PageProps) {
   async function handleSave() {
     setSaving(true)
     try {
-      const { error } = await supabase
-        .from('growth_reviews')
-        .update({
+      // PATCH cannot set status or completed_at — completing a review still
+      // goes through /api/growth-reviews/[id]/complete, which generates the
+      // Growth Profile.
+      const response = await fetch(`/api/admin/growth-reviews/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
           review_notes: formData.review_notes,
           hgri_score: formData.hgri_score,
           growth_classification: formData.growth_classification,
@@ -101,13 +107,12 @@ export default function AdminGrowthReviewDetailPage({ params }: PageProps) {
           retention_score: formData.retention_score,
           authority_score: formData.authority_score,
           scalability_score: formData.scalability_score,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', params.id)
+        }),
+      })
 
-      if (error) {
-        console.error('Error saving review:', error)
-        alert('Failed to save review. Please try again.')
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        alert(payload?.error || 'Failed to save review. Please try again.')
         return
       }
 
@@ -169,6 +174,25 @@ export default function AdminGrowthReviewDetailPage({ params }: PageProps) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+      </div>
+    )
+  }
+
+  // A failed or denied load is distinct from "this review does not exist".
+  if (loadError) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center text-center">
+        <SvgIcon name="warning" size={48} color="var(--error)" />
+        <h2 className="mt-4 text-xl font-semibold text-[var(--text-primary)]">
+          Could not load this review
+        </h2>
+        <p className="mt-2 max-w-md text-[var(--text-secondary)]">{loadError}</p>
+        <div className="mt-6 flex gap-3">
+          <Button onClick={fetchReview}>Try Again</Button>
+          <Link href="/admin/growth-reviews">
+            <Button variant="secondary">Back to Reviews</Button>
+          </Link>
+        </div>
       </div>
     )
   }

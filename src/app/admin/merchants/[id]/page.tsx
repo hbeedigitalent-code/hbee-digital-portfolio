@@ -5,7 +5,6 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@/lib/supabase-client'
 import StatusBadge from '@/components/ui/StatusBadge'
 import SvgIcon from '@/components/ui/SvgIcon'
 import Button from '@/components/ui/Button'
@@ -18,8 +17,8 @@ interface PageProps {
 
 export default function AdminMerchantDetailPage({ params }: PageProps) {
   const router = useRouter()
-  const supabase = createClientComponentClient()
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [merchant, setMerchant] = useState<any>(null)
   const [assessments, setAssessments] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
@@ -32,54 +31,28 @@ export default function AdminMerchantDetailPage({ params }: PageProps) {
   async function fetchMerchantData() {
     setLoading(true)
     try {
-      // Fetch merchant
-      const { data: merchantData, error: merchantError } = await supabase
-        .from('merchants')
-        .select('*')
-        .eq('id', params.id)
-        .single()
+      // One call replaces four direct queries (merchants, merchant_status,
+      // growth_assessments, growth_profiles). The endpoint verifies session,
+      // user-bound admin 2FA and active admin membership, then scopes every
+      // related read by the merchant id from the route.
+      const response = await fetch(`/api/admin/merchants/${params.id}`, {
+        credentials: 'same-origin',
+      })
+      const payload = await response.json().catch(() => null)
 
-      if (merchantError) {
-        console.error('Error fetching merchant:', merchantError)
+      if (!response.ok || !payload?.merchant) {
+        setLoadError(payload?.error || 'Could not load this merchant. Please refresh and try again.')
         return
       }
 
-      setMerchant(merchantData)
-
-      // Fetch merchant status
-      const { data: statusData } = await supabase
-        .from('merchant_status')
-        .select('*')
-        .eq('merchant_id', params.id)
-        .single()
-
-      if (statusData) {
-        setStatus(statusData)
-      }
-
-      // Fetch assessments
-      const { data: assessmentData } = await supabase
-        .from('growth_assessments')
-        .select('*')
-        .eq('merchant_id', params.id)
-        .order('created_at', { ascending: false })
-
-      if (assessmentData) {
-        setAssessments(assessmentData)
-      }
-
-      // Fetch growth profiles
-      const { data: profileData } = await supabase
-        .from('growth_profiles')
-        .select('*')
-        .eq('merchant_id', params.id)
-        .order('created_at', { ascending: false })
-
-      if (profileData) {
-        setProfiles(profileData)
-      }
+      setLoadError(null)
+      setMerchant(payload.merchant)
+      setStatus(payload.status)
+      setAssessments(payload.assessments || [])
+      setProfiles(payload.profiles || [])
     } catch (error) {
       console.error('Error:', error)
+      setLoadError('Could not load this merchant. Please refresh and try again.')
     } finally {
       setLoading(false)
     }
@@ -89,6 +62,27 @@ export default function AdminMerchantDetailPage({ params }: PageProps) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+      </div>
+    )
+  }
+
+  // An authorization or database failure is shown as a real error. It must
+  // never render as an empty list, which would read as "no records".
+  if (loadError) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center text-center">
+        <SvgIcon name="warning" size={48} color="var(--error)" />
+        <h2 className="mt-4 text-xl font-semibold text-[var(--text-primary)]">
+          Could not load this merchant
+        </h2>
+        <p className="mt-2 max-w-md text-[var(--text-secondary)]">{loadError}</p>
+        <button
+          type="button"
+          onClick={fetchMerchantData}
+          className="mt-6 rounded-full bg-[var(--accent-orange)] px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+        >
+          Try Again
+        </button>
       </div>
     )
   }

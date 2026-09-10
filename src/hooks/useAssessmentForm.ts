@@ -42,7 +42,6 @@ const initialFormData: FormData = {
   // Step 7: Growth Readiness
   support_type: '',
   improvement_timeline: '',
-  uploaded_file: null,
   consent: false
 }
 
@@ -52,6 +51,19 @@ export function useAssessmentForm() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
+
+  // Turnstile state is kept OUT of formData on purpose. formData is persisted to
+  // localStorage as a draft, and a challenge token is short-lived and
+  // single-use — restoring a stale one from storage would fail verification and
+  // look like a broken form. `turnstileReset` is a toggle the widget watches so
+  // a failed submission can force a fresh challenge.
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null)
+  const [turnstileReset, setTurnstileReset] = useState(false)
+
+  const resetTurnstile = useCallback(() => {
+    setTurnstileToken(null)
+    setTurnstileReset((v) => !v)
+  }, [])
 
   // Load saved data from localStorage
   useEffect(() => {
@@ -162,6 +174,12 @@ export function useAssessmentForm() {
       }
     }
 
+    // The server verifies the token; this only avoids a pointless round trip.
+    if (!turnstileToken) {
+      setErrors({ submit: 'Please complete the security check before submitting.' })
+      return false
+    }
+
     setIsSubmitting(true)
 
     try {
@@ -170,13 +188,21 @@ export function useAssessmentForm() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        // The token travels alongside the answers but is not part of formData,
+        // so it is never written to the localStorage draft.
+        body: JSON.stringify({ ...formData, turnstile_token: turnstileToken }),
       })
 
-      const result = await response.json()
+      const result = await response.json().catch(() => null)
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to submit assessment')
+        // A used or expired token can never be replayed, so any failed attempt
+        // discards it and asks the widget for a fresh challenge.
+        resetTurnstile()
+        setErrors({
+          submit: result?.error || 'Failed to submit assessment',
+        })
+        return false
       }
 
       setIsSubmitted(true)
@@ -184,12 +210,13 @@ export function useAssessmentForm() {
       return true
     } catch (error) {
       console.error('Submission error:', error)
-      setErrors({ submit: error instanceof Error ? error.message : 'Failed to submit assessment' })
+      resetTurnstile()
+      setErrors({ submit: 'Failed to submit assessment. Please try again.' })
       return false
     } finally {
       setIsSubmitting(false)
     }
-  }, [formData])
+  }, [formData, turnstileToken, resetTurnstile])
 
   return {
     currentStep,
@@ -204,6 +231,10 @@ export function useAssessmentForm() {
     validateCurrentStep,
     isCurrentStepComplete,
     resetForm,
-    submitForm
+    submitForm,
+    turnstileToken,
+    setTurnstileToken,
+    turnstileReset,
+    resetTurnstile
   }
 }

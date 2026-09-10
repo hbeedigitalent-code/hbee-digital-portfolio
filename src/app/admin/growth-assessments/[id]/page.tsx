@@ -5,9 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClientComponentClient } from '@/lib/supabase-client'
 import { MerchantLifecycleService } from '@/lib/services/merchant-lifecycle'
-import { GrowthProfileService } from '@/lib/services/growth-profile-service'
 import StatusBadge from '@/components/ui/StatusBadge'
 import SvgIcon from '@/components/ui/SvgIcon'
 import Button from '@/components/ui/Button'
@@ -20,8 +18,8 @@ interface PageProps {
 
 export default function AdminGrowthReviewDetailPage({ params }: PageProps) {
   const router = useRouter()
-  const supabase = createClientComponentClient()
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [review, setReview] = useState<any>(null)
   const [assessment, setAssessment] = useState<any>(null)
@@ -48,21 +46,20 @@ export default function AdminGrowthReviewDetailPage({ params }: PageProps) {
   async function fetchReview() {
     setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('growth_reviews')
-        .select(`
-          *,
-          merchant:merchants(*),
-          assessment:growth_assessments(*)
-        `)
-        .eq('id', params.id)
-        .single()
+      // /api/admin/growth-reviews/[id] verifies session, user-bound admin 2FA
+      // and active admin membership before reading growth_reviews.
+      const response = await fetch(`/api/admin/growth-reviews/${params.id}`, {
+        credentials: 'same-origin',
+      })
+      const payload = await response.json().catch(() => null)
 
-      if (error) {
-        console.error('Error fetching review:', error)
+      if (!response.ok || !payload?.review) {
+        setLoadError(payload?.error || 'Could not load this review. Please refresh and try again.')
         return
       }
 
+      const data = payload.review
+      setLoadError(null)
       setReview(data)
       setMerchant(data.merchant)
       setAssessment(data.assessment)
@@ -93,9 +90,11 @@ export default function AdminGrowthReviewDetailPage({ params }: PageProps) {
   async function handleSave() {
     setSaving(true)
     try {
-      const { error } = await supabase
-        .from('growth_reviews')
-        .update({
+      const response = await fetch(`/api/admin/growth-reviews/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
           review_notes: formData.review_notes,
           hgri_score: formData.hgri_score,
           growth_classification: formData.growth_classification,
@@ -106,13 +105,12 @@ export default function AdminGrowthReviewDetailPage({ params }: PageProps) {
           retention_score: formData.retention_score,
           authority_score: formData.authority_score,
           scalability_score: formData.scalability_score,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', params.id)
+        }),
+      })
 
-      if (error) {
-        console.error('Error saving review:', error)
-        alert('Failed to save review. Please try again.')
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        alert(payload?.error || 'Failed to save review. Please try again.')
         return
       }
 
@@ -131,12 +129,21 @@ export default function AdminGrowthReviewDetailPage({ params }: PageProps) {
 
     setSaving(true)
     try {
-      // Update review status
-      const { error: updateError } = await supabase
-        .from('growth_reviews')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
+      // SINGLE COMPLETION PATH. This page previously completed a review
+      // entirely from the browser: it set growth_reviews.status to
+      // 'completed', wrote growth_assessments.review_status = 'approved'
+      // unconditionally, then generated the profile client-side. That was a
+      // second, ungated route to the same operation, and it is why stored
+      // approval values cannot by themselves evidence a deliberate decision.
+      // It now calls the one server route that owns completion, which
+      // verifies session, admin 2FA and active membership, and derives the
+      // merchant and assessment from the stored review row.
+      setGenerating(true)
+      const response = await fetch(`/api/growth-reviews/${params.id}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
           review_notes: formData.review_notes,
           hgri_score: formData.hgri_score,
           growth_classification: formData.growth_classification,
@@ -147,63 +154,18 @@ export default function AdminGrowthReviewDetailPage({ params }: PageProps) {
           retention_score: formData.retention_score,
           authority_score: formData.authority_score,
           scalability_score: formData.scalability_score,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', params.id)
+        }),
+      })
 
-      if (updateError) {
-        console.error('Error completing review:', updateError)
-        alert('Failed to complete review. Please try again.')
+      const result = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        alert(result?.error || 'Failed to complete review. Please try again.')
         return
       }
 
-      // Update assessment
-      if (assessment) {
-        await supabase
-          .from('growth_assessments')
-          .update({
-            review_status: 'approved',
-            hgri_score: formData.hgri_score,
-            growth_classification: formData.growth_classification,
-            reviewed_at: new Date().toISOString()
-          })
-          .eq('id', assessment.id)
-      }
-
-      // Generate growth profile
-      setGenerating(true)
-      const profile = await GrowthProfileService.createFromAssessment(
-        assessment.id,
-        review.reviewer_id || '',
-        {
-          title: `${merchant?.business_name || 'Business'} - Growth Profile`,
-          summary: `Based on the Growth Readiness Assessment, ${merchant?.business_name || 'the business'} shows strong potential for growth with a focus on ${formData.growth_classification}.`,
-          hgri_score: formData.hgri_score,
-          growth_classification: formData.growth_classification,
-          profile_data: {
-            scores: {
-              pillars: {
-                visibility: formData.visibility_score,
-                conversion: formData.conversion_score,
-                retention: formData.retention_score,
-                authority: formData.authority_score,
-                scalability: formData.scalability_score
-              }
-            },
-            recommendations: generateRecommendations(formData)
-          }
-        }
-      )
-
-      if (profile) {
-        // Update merchant status
-        await MerchantLifecycleService.updateStatus(merchant.id, 'growth_profile_ready')
-
-        alert('🎉 Review completed! Growth profile has been generated.')
-        router.push(`/admin/growth-profiles/${profile.id}`)
-      } else {
-        alert('Review completed but profile generation failed. Please check the logs.')
-      }
+      alert('🎉 Review completed! Growth profile has been generated.')
+      router.push(`/admin/growth-profiles/${result.profile_id}`)
     } catch (error) {
       console.error('Error:', error)
       alert('An error occurred while completing the review.')

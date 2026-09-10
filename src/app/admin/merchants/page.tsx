@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClientComponentClient } from '@/lib/supabase-client'
 import Link from 'next/link'
 import SvgIcon from '@/components/ui/SvgIcon'
 
@@ -20,9 +19,9 @@ interface Merchant {
 }
 
 export default function AdminMerchantsPage() {
-  const supabase = createClientComponentClient()
   const [merchants, setMerchants] = useState<Merchant[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [stats, setStats] = useState({ total: 0, pending: 0, active: 0 })
 
   useEffect(() => {
@@ -32,26 +31,55 @@ export default function AdminMerchantsPage() {
   async function fetchMerchants() {
     setLoading(true)
 
-    const { data, error } = await supabase
-      .from('merchant_accounts')
-      .select('*')
-      .order('created_at', { ascending: false })
+    // /api/admin/merchants verifies session, user-bound admin 2FA and active
+    // admin membership before reading merchant_accounts.
+    try {
+      const response = await fetch('/api/admin/merchants', { credentials: 'same-origin' })
+      const payload = await response.json().catch(() => null)
 
-    if (!error && data) {
-      setMerchants(data)
-      const total = data.length
-      const pending = data.filter((m: any) => m.status === 'pending').length
-      const active = data.filter((m: any) => m.status === 'active').length
-      setStats({ total, pending, active })
+      if (!response.ok || !Array.isArray(payload?.merchants)) {
+        setLoadError(payload?.error || 'Could not load merchants. Please refresh and try again.')
+        setMerchants([])
+        return
+      }
+
+      setLoadError(null)
+      setMerchants(payload.merchants)
+      setStats(payload.stats)
+    } catch (error) {
+      console.error('Error:', error)
+      setLoadError('Could not load merchants. Please refresh and try again.')
+      setMerchants([])
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   if (loading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--accent-orange)] border-t-transparent" />
+      </div>
+    )
+  }
+
+  // An authorization or database failure is shown as a real error. It must
+  // never render as an empty list, which would read as "no records".
+  if (loadError) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center text-center">
+        <SvgIcon name="warning" size={48} color="var(--error)" />
+        <h2 className="mt-4 text-xl font-semibold text-[var(--text-primary)]">
+          Could not load merchants
+        </h2>
+        <p className="mt-2 max-w-md text-[var(--text-secondary)]">{loadError}</p>
+        <button
+          type="button"
+          onClick={fetchMerchants}
+          className="mt-6 rounded-full bg-[var(--accent-orange)] px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+        >
+          Try Again
+        </button>
       </div>
     )
   }
