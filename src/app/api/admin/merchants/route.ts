@@ -11,8 +11,17 @@
 import { NextResponse } from 'next/server'
 import { requireActiveAdmin, queryFailure } from '@/lib/admin-api-auth'
 
+// The confirmed merchant_accounts columns, enumerated rather than `*` so a
+// column added to the table later is not published by accident.
+//
+// `phone` and `website` used to appear here. Those are columns of the separate
+// `merchants` table (the assessment record), NOT of merchant_accounts, which
+// names the same ideas `whatsapp` and `website_url`. PostgREST rejected the
+// whole SELECT with 42703, so the list endpoint returned a generic 500 while
+// every other converted page worked.
 const MERCHANT_ACCOUNT_COLUMNS =
-  'id, business_name, contact_name, email, phone, website, status, created_at, updated_at'
+  'id, business_name, contact_name, email, whatsapp, website_url, country, ' +
+  'industry, status, email_verified, created_at, updated_at'
 
 export async function GET() {
   try {
